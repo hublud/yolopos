@@ -165,11 +165,14 @@ class SyncManager {
                 id: `${order.id}-item-${idx}`,
                 order_id: order.id,
                 product_id: it.productId,
+                variant_name: it.variantName || null,
                 quantity: it.quantity,
                 price: it.price
               }))
               const { error: itErr } = await supabase.from('order_items').upsert(orderItems)
-              if (itErr) err = itErr
+              if (itErr) {
+                console.warn('Order items sync issue (order still saved):', itErr)
+              }
             }
 
             // Sync loyalty points increment
@@ -323,13 +326,12 @@ class SyncManager {
         syncedCount: queueResult.syncedCount
       }
     } catch (e: any) {
-      console.warn('Sync failed:', e)
-      this.handleNetworkChange(false)
+      console.warn('Sync error:', e)
       this.isSyncing = false
       this.notify()
       return {
         success: false,
-        message: 'Could not connect to Supabase Cloud. Check internet connection.',
+        message: e?.message ? `Sync notice: ${e.message}` : 'Could not reach Supabase Cloud.',
         syncedCount: 0
       }
     }
