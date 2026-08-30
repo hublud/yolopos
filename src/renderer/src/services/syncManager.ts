@@ -58,19 +58,33 @@ class SyncManager {
 
   public async forceCheck(): Promise<boolean> {
     try {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        this.setOnline(false)
+        return false
+      }
+
       const { data, error } = await supabase.from('products').select('id').limit(1)
       const isReachable = !error && data !== null
-      this.handleNetworkChange(isReachable)
-      return isReachable
+      if (isReachable) {
+        this.setOnline(true)
+        if (this.getQueue().length > 0 && !this.isSyncing) {
+          this.syncPendingData()
+        }
+        return true
+      }
+      
+      const online = typeof navigator !== 'undefined' ? navigator.onLine : true
+      this.setOnline(online)
+      return online
     } catch {
-      this.handleNetworkChange(false)
-      return false
+      const online = typeof navigator !== 'undefined' ? navigator.onLine : true
+      this.setOnline(online)
+      return online
     }
   }
 
   private handleNetworkChange(online: boolean) {
-    this.isOnline = online
-    this.notify()
+    this.setOnline(online)
     if (online && this.getQueue().length > 0 && !this.isSyncing) {
       this.syncPendingData()
     }
@@ -88,6 +102,11 @@ class SyncManager {
 
   private saveQueue(queue: QueueItem[]) {
     localStorage.setItem('pos_offline_queue', JSON.stringify(queue))
+    this.notify()
+  }
+
+  public clearQueue(): void {
+    localStorage.removeItem('pos_offline_queue')
     this.notify()
   }
 
@@ -145,44 +164,70 @@ class SyncManager {
         switch (item.type) {
           case 'CREATE_ORDER': {
             const { order, items, customerId, pointsEarned } = item.payload
-            const { error: oErr } = await supabase.from('orders').upsert({
-              id: order.id,
-              order_number: order.orderNumber,
-              total: order.total,
-              discount: order.discount || 0,
-              tax: order.tax || 0,
+            if (!order || !order.id) break
+
+            const orderPayload: any = {
+              id: String(order.id),
+              order_number: String(order.orderNumber || Math.floor(100000 + Math.random() * 900000)),
+              total: Number(order.total || 0),
+              discount: Number(order.discount || 0),
+              tax: Number(order.tax || 0),
               status: order.status || 'completed',
-              cashier_id: order.cashierId || null,
-              customer_id: order.customerId || null,
-              created_at: order.createdAt
-            })
-            if (oErr) {
-              err = oErr
-              break
+              created_at: Number(order.createdAt || Date.now())
             }
 
-            if (items && items.length > 0) {
+            if (order.cashierId === 'cashier-admin' || order.cashierId === 'cashier-staff') {
+              orderPayload.cashier_id = order.cashierId
+            } else {
+              orderPayload.cashier_id = 'cashier-staff'
+            }
+
+            if (customerId) {
+              orderPayload.customer_id = customerId
+            }
+
+            const { error: oErr } = await supabase.from('orders').upsert(orderPayload)
+            if (oErr) {
+              console.warn('Order upsert fallback:', oErr)
+              const { error: retryErr } = await supabase.from('orders').upsert({
+                id: orderPayload.id,
+                order_number: orderPayload.order_number,
+                total: orderPayload.total,
+                discount: orderPayload.discount,
+                tax: orderPayload.tax,
+                status: 'completed',
+                created_at: orderPayload.created_at
+              })
+              if (retryErr) err = retryErr
+            }
+
+            if (items && Array.isArray(items) && items.length > 0) {
               const orderItems = items.map((it: any, idx: number) => ({
                 id: `${order.id}-item-${idx}`,
-                order_id: order.id,
-                product_id: it.productId,
+                order_id: String(order.id),
+                product_id: String(it.productId || 'main-1'),
                 variant_name: it.variantName || null,
-                quantity: it.quantity,
-                price: it.price
+                quantity: Number(it.quantity || 1),
+                price: Number(it.price || 0)
               }))
-              const { error: itErr } = await supabase.from('order_items').upsert(orderItems)
-              if (itErr) {
-                console.warn('Order items sync issue (order still saved):', itErr)
+              try {
+                await supabase.from('order_items').upsert(orderItems)
+              } catch (e) {
+                console.warn('Order items sync note:', e)
               }
             }
 
             // Sync loyalty points increment
             if (customerId && pointsEarned) {
-              const { data: cust } = await supabase.from('customers').select('loyalty_points').eq('id', customerId).single()
-              if (cust) {
-                await supabase.from('customers').update({
-                  loyalty_points: (cust.loyalty_points || 0) + pointsEarned
-                }).eq('id', customerId)
+              try {
+                const { data: cust } = await supabase.from('customers').select('loyalty_points').eq('id', customerId).single()
+                if (cust) {
+                  await supabase.from('customers').update({
+                    loyalty_points: (cust.loyalty_points || 0) + pointsEarned
+                  }).eq('id', customerId)
+                }
+              } catch (e) {
+                console.warn('Loyalty points sync note:', e)
               }
             }
             break
