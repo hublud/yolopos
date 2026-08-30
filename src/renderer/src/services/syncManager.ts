@@ -300,7 +300,7 @@ class SyncManager {
         const s = setData[0]
         this.setCache('settings', {
           businessName: s.business_name || 'YOLO BITES',
-          taxRate: s.tax_rate !== undefined ? Number(s.tax_rate) : 10.0,
+          taxRate: s.tax_rate !== undefined ? Number(s.tax_rate) : 0.0,
           receiptAddress: s.receipt_address || '',
           phones: s.phones || ''
         })

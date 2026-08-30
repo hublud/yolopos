@@ -130,7 +130,7 @@ export function POS({ cashier, products, settings, loading }: { cashier: any; pr
 
   // Calculations
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0)
-  const taxRate = settings ? Number(settings.taxRate) : 0.5
+  const taxRate = settings ? Number(settings.taxRate) : 0.0
   const tax = subtotal * (taxRate / 100)
   const total = subtotal + tax - discount
 

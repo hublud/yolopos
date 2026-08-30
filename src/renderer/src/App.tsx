@@ -16,7 +16,7 @@ function App() {
   const [loadingProducts, setLoadingProducts] = useState<boolean>(() => syncManager.getCached<any[]>('products', []).length === 0)
   const [settings, setSettings] = useState<any>(() => syncManager.getCached<any>('settings', {
     businessName: 'YOLO BITES',
-    taxRate: 10.0,
+    taxRate: 0.0,
     receiptAddress: 'SHOP G9, A.M STORE ALIYU MAKAMA ROAD,\nBARNAWA, KADUNA , KADUNA STATE,\nNIGERIA',
     phones: '07013974928, 07044030444'
   }))

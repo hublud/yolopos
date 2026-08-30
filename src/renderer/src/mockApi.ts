@@ -50,7 +50,7 @@ const DEFAULT_CUSTOMERS = [
 const DEFAULT_SETTINGS = {
   id: 1,
   businessName: 'YOLO BITES',
-  taxRate: 10.0,
+  taxRate: 0.0,
   receiptAddress: 'SHOP G9, A.M STORE ALIYU MAKAMA ROAD,\nBARNAWA, KADUNA , KADUNA STATE,\nNIGERIA',
   phones: '07013974928, 07044030444'
 };

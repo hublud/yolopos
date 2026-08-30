@@ -50,7 +50,7 @@ export function ReceiptModal({ order, onClose }) {
   const businessName = order.settings?.businessName || 'YOLO BITES'
   const receiptAddress = order.settings?.receiptAddress || 'SHOP G9, A.M STORE ALIYU MAKAMA ROAD,\nBARNAWA, KADUNA , KADUNA STATE,\nNIGERIA'
   const phones = order.settings?.phones || '07013974928, 07044030444'
-  const taxRate = order.taxRate !== undefined ? order.taxRate : 10
+  const taxRate = order.taxRate !== undefined ? order.taxRate : 0
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 print:bg-transparent print:backdrop-blur-none print:p-0">

@@ -11,7 +11,7 @@ export interface ProductVariant {
 const DEFAULT_SETTINGS = {
   id: 1,
   businessName: 'YOLO BITES',
-  taxRate: 0.5,
+  taxRate: 0.0,
   receiptAddress: 'SHOP G9, A.M STORE ALIYU MAKAMA ROAD,\nBARNAWA, KADUNA , KADUNA STATE,\nNIGERIA',
   phones: '09038108882, 07044030444'
 }
@@ -695,7 +695,7 @@ export const supabaseApi = {
         const formatted = {
           id: 1,
           businessName: row.business_name || 'YOLO BITES',
-          taxRate: row.tax_rate !== undefined ? Number(row.tax_rate) : 0.5,
+          taxRate: row.tax_rate !== undefined ? Number(row.tax_rate) : 0.0,
           receiptAddress: row.receipt_address || '',
           phones: row.phones || ''
         }

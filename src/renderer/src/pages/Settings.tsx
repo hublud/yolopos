@@ -13,7 +13,7 @@ interface SettingsProps {
 
 export function Settings({ settings, onSettingsSaved }: SettingsProps) {
   const [businessName, setBusinessName] = useState('')
-  const [taxRate, setTaxRate] = useState(10)
+  const [taxRate, setTaxRate] = useState(0)
   const [receiptAddress, setReceiptAddress] = useState('')
   const [phones, setPhones] = useState('')
 
@@ -39,7 +39,7 @@ export function Settings({ settings, onSettingsSaved }: SettingsProps) {
   useEffect(() => {
     if (settings) {
       setBusinessName(settings.businessName || 'YOLO BITES')
-      setTaxRate(settings.taxRate || 10)
+      setTaxRate(settings.taxRate !== undefined ? Number(settings.taxRate) : 0)
       setReceiptAddress(settings.receiptAddress || '')
       setPhones(settings.phones || '')
     }
