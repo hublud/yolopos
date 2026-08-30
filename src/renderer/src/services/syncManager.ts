@@ -48,6 +48,13 @@ class SyncManager {
     this.listeners.forEach(l => l(this.isOnline, queueLen))
   }
 
+  public setOnline(online: boolean) {
+    if (this.isOnline !== online) {
+      this.isOnline = online
+      this.notify()
+    }
+  }
+
   public async forceCheck(): Promise<boolean> {
     try {
       const { data, error } = await supabase.from('products').select('id').limit(1)
@@ -115,8 +122,8 @@ class SyncManager {
   }
 
   // Synchronize all pending offline items to Supabase
-  public async syncPendingData(): Promise<{ success: boolean; syncedCount: number; errors: string[] }> {
-    if (this.isSyncing) return { success: false, syncedCount: 0, errors: ['Sync already in progress'] }
+  public async syncPendingData(skipSyncingFlag = false): Promise<{ success: boolean; syncedCount: number; errors: string[] }> {
+    if (this.isSyncing && !skipSyncingFlag) return { success: false, syncedCount: 0, errors: ['Sync already in progress'] }
     
     const queue = this.getQueue()
     if (queue.length === 0) {
@@ -300,12 +307,12 @@ class SyncManager {
       }
 
       // 3. Sync pending offline items
-      const queueResult = await this.syncPendingData()
+      const queueResult = await this.syncPendingData(true)
 
       this.isSyncing = false
       this.notify()
 
-      let message = 'All data synchronized and up to date with cloud!'
+      let message = 'All data synchronized and connected to cloud!'
       if (queueResult.syncedCount > 0) {
         message = `Successfully uploaded ${queueResult.syncedCount} offline record(s) and synced with cloud!`
       }

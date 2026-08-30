@@ -254,6 +254,7 @@ export const supabaseApi = {
     try {
       const { data, error } = await supabase.from('cashiers').select('*')
       if (!error && data && data.length > 0) {
+        syncManager.setOnline(true)
         syncManager.setCache('cashiers', data)
         return data
       }
@@ -273,7 +274,10 @@ export const supabaseApi = {
 
     try {
       const { error } = await supabase.from('cashiers').update({ pin }).eq('id', id)
-      if (!error) return { success: true }
+      if (!error) {
+        syncManager.setOnline(true)
+        return { success: true }
+      }
     } catch {
       // Enqueue
     }
@@ -292,7 +296,10 @@ export const supabaseApi = {
 
     try {
       const { error } = await supabase.from('cashiers').insert(newCashier)
-      if (!error) return { success: true, id }
+      if (!error) {
+        syncManager.setOnline(true)
+        return { success: true, id }
+      }
     } catch {
       // Enqueue
     }
@@ -306,6 +313,7 @@ export const supabaseApi = {
     try {
       const { data, error } = await supabase.from('products').select('*').order('name', { ascending: true })
       if (!error && data && data.length > 0) {
+        syncManager.setOnline(true)
         const formatted = data.map(p => ({
           id: p.id,
           name: p.name,
@@ -598,6 +606,7 @@ export const supabaseApi = {
             price: Number(it.price)
           }))
         }))
+        syncManager.setOnline(true)
         syncManager.setCache('orders', fullOrders)
         return fullOrders
       }
@@ -612,6 +621,7 @@ export const supabaseApi = {
     try {
       const { data, error } = await supabase.from('customers').select('*').order('name', { ascending: true })
       if (!error && data && data.length > 0) {
+        syncManager.setOnline(true)
         const formatted = data.map(c => ({
           id: c.id,
           name: c.name,
@@ -646,7 +656,10 @@ export const supabaseApi = {
 
     try {
       const { error } = await supabase.from('customers').insert(newCustomer)
-      if (!error) return { success: true, id }
+      if (!error) {
+        syncManager.setOnline(true)
+        return { success: true, id }
+      }
     } catch {
       // Enqueue
     }
@@ -675,14 +688,16 @@ export const supabaseApi = {
   // 6. SETTINGS
   getSettings: async () => {
     try {
-      const { data, error } = await supabase.from('settings').select('*').eq('id', 1).single()
-      if (!error && data) {
+      const { data, error } = await supabase.from('settings').select('*').limit(1)
+      if (!error && data && data.length > 0) {
+        syncManager.setOnline(true)
+        const row = data[0]
         const formatted = {
           id: 1,
-          businessName: data.business_name,
-          taxRate: Number(data.tax_rate),
-          receiptAddress: data.receipt_address,
-          phones: data.phones
+          businessName: row.business_name || 'YOLO BITES',
+          taxRate: row.tax_rate !== undefined ? Number(row.tax_rate) : 0.5,
+          receiptAddress: row.receipt_address || '',
+          phones: row.phones || ''
         }
         syncManager.setCache('settings', formatted)
         return formatted
@@ -711,7 +726,10 @@ export const supabaseApi = {
 
     try {
       const { error } = await supabase.from('settings').upsert({ id: 1, ...payload })
-      if (!error) return { success: true }
+      if (!error) {
+        syncManager.setOnline(true)
+        return { success: true }
+      }
     } catch {
       // Enqueue
     }
