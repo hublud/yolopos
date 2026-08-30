@@ -5,12 +5,13 @@ export interface QueueItem {
   type: 'CREATE_ORDER' | 'UPDATE_STOCK' | 'ADD_PRODUCT' | 'UPDATE_PRODUCT' | 'ADD_CUSTOMER' | 'SAVE_SETTINGS' | 'ADD_CASHIER' | 'UPDATE_PIN'
   payload: any
   timestamp: number
+  retries?: number
 }
 
 type NetworkListener = (isOnline: boolean, pendingCount: number) => void
 
 class SyncManager {
-  private isOnline: boolean = navigator.onLine
+  private isOnline: boolean = true
   private listeners: NetworkListener[] = []
   private isSyncing: boolean = false
 
@@ -21,7 +22,7 @@ class SyncManager {
     // Periodically verify true internet connectivity by pinging Supabase
     setInterval(() => {
       this.forceCheck()
-    }, 15000)
+    }, 10000)
 
     // Initial connectivity check immediately
     this.forceCheck()
@@ -247,13 +248,21 @@ class SyncManager {
         if (err) {
           console.error(`Failed syncing item ${item.id}:`, err)
           errors.push(`Action ${item.type} failed: ${err.message || JSON.stringify(err)}`)
-          remainingQueue.push(item)
+          const retries = (item.retries || 0) + 1
+          if (retries < 3) {
+            remainingQueue.push({ ...item, retries })
+          } else {
+            console.warn(`Auto-cleared invalid sync item ${item.id} after 3 retries:`, item)
+          }
         } else {
           syncedCount++
         }
       } catch (ex: any) {
         errors.push(`Exception syncing ${item.type}: ${ex.message}`)
-        remainingQueue.push(item)
+        const retries = (item.retries || 0) + 1
+        if (retries < 3) {
+          remainingQueue.push({ ...item, retries })
+        }
       }
     }
 
