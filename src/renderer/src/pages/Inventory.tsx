@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Package, Search, Plus, Edit2, X, TrendingUp, Image as ImageIcon, Layers, Trash2 } from 'lucide-react'
 import { ProductImage } from '../components/ProductImage'
+import logoSrc from '../assets/logo.jpeg'
+import { syncManager } from '../services/syncManager'
 
 export interface VariantItem {
   id: string
@@ -9,15 +11,35 @@ export interface VariantItem {
   active: boolean
 }
 
-export function Inventory() {
-  const [products, setProducts] = useState<any[]>([])
+export interface InventoryProps {
+  products?: any[]
+  loading?: boolean
+  onRefresh?: () => void
+}
+
+export function Inventory({ products: propProducts, loading: propLoading, onRefresh }: InventoryProps = {}) {
+  const [products, setProducts] = useState<any[]>(() => propProducts || syncManager.getCached<any[]>('products', []))
+  const [loading, setLoading] = useState<boolean>(() => propLoading !== undefined ? propLoading : (syncManager.getCached<any[]>('products', []).length === 0))
   const [search, setSearch] = useState('')
   
   const initialCategories = ['Mains', 'Combo Deals', 'Burgers', 'Small Chops', 'Proteins', 'Extras', 'Loaded Fries', 'Pizza', 'Shawarma', 'Mocktail', 'Cocktail', 'Milkshake', 'Smoothie', 'Parfait', 'Drinks']
   const categoriesList = Array.from(new Set([...initialCategories, ...products.map((p: any) => p.category)]))
 
-  // Common loading state
-  const [loading, setLoading] = useState(false)
+  // Modal saving loading state
+  const [modalLoading, setModalLoading] = useState(false)
+
+  // Synchronize with parent props
+  useEffect(() => {
+    if (propProducts && propProducts.length > 0) {
+      setProducts(propProducts)
+    }
+  }, [propProducts])
+
+  useEffect(() => {
+    if (propLoading !== undefined) {
+      setLoading(propLoading)
+    }
+  }, [propLoading])
 
   // Add Product Modal States
   const [showAddModal, setShowAddModal] = useState(false)
@@ -52,12 +74,18 @@ export function Inventory() {
   }, [])
 
   const loadProducts = async () => {
+    if (products.length === 0) setLoading(true)
     try {
       // @ts-ignore
       const data = await window.api.getProducts()
-      setProducts(data)
+      if (data && Array.isArray(data)) {
+        setProducts(data)
+      }
+      if (onRefresh) onRefresh()
     } catch (e) {
       console.error(e)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -126,7 +154,7 @@ export function Inventory() {
     e.preventDefault()
     const categoryToUse = isCreatingNewCategory ? customCategory.trim() : newCategory
     if (!newName || !newPrice || !newStock || !categoryToUse) return
-    setLoading(true)
+    setModalLoading(true)
     try {
       const payload = {
         name: newName,
@@ -155,14 +183,14 @@ export function Inventory() {
     } catch (err) {
       alert('Error adding product.')
     }
-    setLoading(false)
+    setModalLoading(false)
   }
 
   const handleEditProduct = async (e: React.FormEvent) => {
     e.preventDefault()
     const categoryToUse = isEditingNewCategory ? editCustomCategory.trim() : editCategory
     if (!editId || !editName || !editPrice || !categoryToUse) return
-    setLoading(true)
+    setModalLoading(true)
     try {
       const payload = {
         name: editName,
@@ -190,13 +218,13 @@ export function Inventory() {
     } catch (err) {
       alert('Error updating product.')
     }
-    setLoading(false)
+    setModalLoading(false)
   }
 
   const handleAdjustStock = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedProduct || !adjustChange) return
-    setLoading(true)
+    setModalLoading(true)
     try {
       const payload = {
         productId: selectedProduct.id,
@@ -217,7 +245,7 @@ export function Inventory() {
     } catch (err) {
       alert('Error adjusting stock.')
     }
-    setLoading(false)
+    setModalLoading(false)
   }
 
   const openEditModal = (p: any) => {
@@ -279,7 +307,39 @@ export function Inventory() {
               </tr>
             </thead>
             <tbody className="text-sm">
-              {filteredProducts.map((p: any) => {
+              {loading && products.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-16">
+                    <div className="flex flex-col items-center justify-center gap-3">
+                      <div className="relative flex items-center justify-center">
+                        <div className="w-16 h-16 rounded-2xl bg-white shadow-lg border border-gray-100 flex items-center justify-center p-2 relative overflow-hidden z-10">
+                          <img src={logoSrc} alt="YOLO BITES" className="w-full h-full object-contain rounded-xl animate-pulse" />
+                        </div>
+                        <div className="absolute -inset-2.5 rounded-[26px] border-2 border-dashed border-yolo-red/50 animate-spin pointer-events-none" />
+                      </div>
+                      <div className="text-center">
+                        <h4 className="text-base font-bold text-yolo-dark">Loading YOLO BITES Inventory...</h4>
+                        <p className="text-xs text-gray-400 mt-0.5">Fetching product catalog, variants, and live stock levels</p>
+                      </div>
+                      {/* Animated Skeleton Table Rows */}
+                      <div className="w-full max-w-4xl flex flex-col gap-2.5 mt-6 px-4">
+                        {[1, 2, 3, 4, 5, 6].map(i => (
+                          <div key={i} className="h-14 bg-gray-100/70 border border-gray-200/50 rounded-xl animate-pulse w-full flex items-center px-4 justify-between">
+                            <div className="flex items-center gap-3 w-1/3">
+                              <div className="w-9 h-9 rounded-lg bg-gray-200/80 shrink-0" />
+                              <div className="h-4 bg-gray-200/80 rounded w-3/4" />
+                            </div>
+                            <div className="h-4 bg-gray-200/80 rounded w-20" />
+                            <div className="h-4 bg-gray-200/80 rounded w-24" />
+                            <div className="h-6 bg-gray-200/80 rounded-full w-24" />
+                            <div className="w-16 h-8 bg-gray-200/80 rounded-lg" />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              ) : filteredProducts.map((p: any) => {
                 const variants = (p.variants || []).filter((v: any) => v.active !== false)
                 return (
                   <tr key={p.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
@@ -346,11 +406,14 @@ export function Inventory() {
                   </tr>
                 )
               })}
-              {filteredProducts.length === 0 && (
+              {!loading && filteredProducts.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="text-center py-12 text-gray-500">
-                    <Package className="mx-auto mb-3 opacity-50" size={48} />
-                    No products found
+                  <td colSpan={5} className="text-center py-16 text-gray-500">
+                    <Package className="mx-auto mb-3 opacity-40 text-gray-400" size={48} />
+                    <p className="text-base font-semibold text-gray-700">No products found</p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {search ? `No inventory matching "${search}"` : 'Click "+ Add Product" to add items to your catalog.'}
+                    </p>
                   </td>
                 </tr>
               )}
@@ -543,10 +606,10 @@ export function Inventory() {
 
               <button 
                 type="submit"
-                disabled={loading}
+                disabled={modalLoading}
                 className="bg-yolo-red text-white py-3 rounded-xl font-bold hover:bg-red-700 transition-colors shadow-md mt-2 disabled:bg-gray-300 disabled:cursor-not-allowed"
               >
-                {loading ? 'Adding...' : 'Add Product'}
+                {modalLoading ? 'Adding...' : 'Add Product'}
               </button>
             </form>
           </div>
@@ -723,10 +786,10 @@ export function Inventory() {
 
               <button 
                 type="submit"
-                disabled={loading}
+                disabled={modalLoading}
                 className="bg-yolo-red text-white py-3 rounded-xl font-bold hover:bg-red-700 transition-colors shadow-md mt-2 disabled:bg-gray-300 disabled:cursor-not-allowed"
               >
-                {loading ? 'Saving...' : 'Save Product Changes'}
+                {modalLoading ? 'Saving...' : 'Save Product Changes'}
               </button>
             </form>
           </div>

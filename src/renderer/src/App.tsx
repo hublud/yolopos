@@ -75,7 +75,7 @@ function App() {
     >
       {currentTab === 'pos' && <POS cashier={cashier} products={products} settings={settings} loading={loadingProducts} />}
       {cashier?.role === 'admin' && currentTab === 'dashboard' && <Dashboard />}
-      {cashier?.role === 'admin' && currentTab === 'inventory' && <Inventory />}
+      {cashier?.role === 'admin' && currentTab === 'inventory' && <Inventory products={products} loading={loadingProducts} onRefresh={loadProducts} />}
       {cashier?.role === 'admin' && currentTab === 'customers' && <Customers />}
       {cashier?.role === 'admin' && currentTab === 'settings' && <Settings settings={settings} onSettingsSaved={loadSettings} />}
     </Layout>
