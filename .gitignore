@@ -1,0 +1,12 @@
+node_modules
+dist
+out
+yolo-web-build/win-unpacked
+win-unpacked
+*.exe
+*.asar
+.DS_Store
+.eslintcache
+*.log*
+*.db*
+
