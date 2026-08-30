@@ -12,8 +12,13 @@ export default defineConfig({
       '@renderer': resolve(__dirname, 'src/renderer/src')
     }
   },
+  build: {
+    outDir: resolve(__dirname, 'dist'),
+    emptyOutDir: true
+  },
   plugins: [react(), viteSingleFile()],
   server: {
     port: 5173
   }
 })
+
