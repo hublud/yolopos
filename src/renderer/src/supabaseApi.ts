@@ -641,20 +641,37 @@ export const supabaseApi = {
           })
         }
 
-        const fullOrders = ordersRes.data.map((order: any) => ({
-          id: order.id,
-          orderNumber: order.order_number || order.orderNumber,
-          total: Number(order.total),
-          discount: Number(order.discount || 0),
-          tax: Number(order.tax || 0),
-          status: order.status,
-          cashierId: order.cashier_id || order.cashierId,
-          customerId: order.customer_id || order.customerId,
-          createdAt: Number(order.created_at || order.createdAt),
-          cashierName: cashiersMap.get(order.cashier_id) || (order.cashier_id === 'cashier-admin' ? 'Admin' : 'Staff'),
-          customerName: customersMap.get(order.customer_id) || '',
-          items: itemsByOrder[order.id] || []
-        }))
+        const fullOrders = ordersRes.data.map((order: any) => {
+          const rawCreated = order.created_at || order.createdAt
+          let timestamp = Date.now()
+          if (typeof rawCreated === 'number') {
+            timestamp = rawCreated
+          } else if (rawCreated) {
+            const num = Number(rawCreated)
+            if (!isNaN(num) && num > 0) {
+              timestamp = num
+            } else {
+              const parsed = Date.parse(rawCreated)
+              if (!isNaN(parsed)) timestamp = parsed
+            }
+          }
+
+          return {
+            id: order.id,
+            orderNumber: order.order_number || order.orderNumber,
+            total: Number(order.total),
+            discount: Number(order.discount || 0),
+            tax: Number(order.tax || 0),
+            status: order.status,
+            paymentMethod: order.payment_method || order.paymentMethod || 'cash',
+            cashierId: order.cashier_id || order.cashierId,
+            customerId: order.customer_id || order.customerId,
+            createdAt: timestamp,
+            cashierName: cashiersMap.get(order.cashier_id) || (order.cashier_id === 'cashier-admin' ? 'Admin' : 'Staff'),
+            customerName: customersMap.get(order.customer_id) || '',
+            items: itemsByOrder[order.id] || []
+          }
+        })
 
         syncManager.setOnline(true)
         syncManager.setCache('orders', fullOrders)

@@ -48,7 +48,7 @@ export function Dashboard() {
   const [isRefreshing, setIsRefreshing] = useState(false)
   
   // Date Filtering states
-  const [filterMode, setFilterMode] = useState<'today' | 'date' | 'month'>('today')
+  const [filterMode, setFilterMode] = useState<'all' | 'today' | 'date' | 'month'>('today')
   
   // Default values for pickers (local timezone)
   const getTodayString = () => {
@@ -136,11 +136,16 @@ export function Dashboard() {
   // Filter orders based on selected mode
   const filteredOrders = allOrders.filter(order => {
     if (!order) return false
-    const orderDateStr = getLocalDateString(order.createdAt) // YYYY-MM-DD
+    const rawTime = order.createdAt
+    const timeMs = typeof rawTime === 'number' ? rawTime : Number(rawTime) || Date.now()
+    const orderDateStr = getLocalDateString(timeMs) // YYYY-MM-DD
     const orderMonthStr = orderDateStr.substring(0, 7) // YYYY-MM
 
-    if (filterMode === 'today') {
-      return orderDateStr === getTodayString()
+    if (filterMode === 'all') {
+      return true
+    } else if (filterMode === 'today') {
+      const isWithinLast24Hours = (Date.now() - timeMs) >= 0 && (Date.now() - timeMs) <= (24 * 60 * 60 * 1000)
+      return orderDateStr === getTodayString() || isWithinLast24Hours
     } else if (filterMode === 'date') {
       return orderDateStr === selectedDate
     } else if (filterMode === 'month') {
@@ -301,7 +306,7 @@ export function Dashboard() {
             <div className="flex bg-gray-100 p-1 rounded-xl">
               <button
                 onClick={() => setFilterMode('today')}
-                className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                   filterMode === 'today' 
                     ? 'bg-white text-yolo-dark shadow-sm' 
                     : 'text-gray-500 hover:text-yolo-dark'
@@ -310,8 +315,18 @@ export function Dashboard() {
                 Today
               </button>
               <button
+                onClick={() => setFilterMode('all')}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  filterMode === 'all' 
+                    ? 'bg-white text-yolo-dark shadow-sm' 
+                    : 'text-gray-500 hover:text-yolo-dark'
+                }`}
+              >
+                All Orders
+              </button>
+              <button
                 onClick={() => setFilterMode('date')}
-                className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                   filterMode === 'date' 
                     ? 'bg-white text-yolo-dark shadow-sm' 
                     : 'text-gray-500 hover:text-yolo-dark'
@@ -321,7 +336,7 @@ export function Dashboard() {
               </button>
               <button
                 onClick={() => setFilterMode('month')}
-                className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                   filterMode === 'month' 
                     ? 'bg-white text-yolo-dark shadow-sm' 
                     : 'text-gray-500 hover:text-yolo-dark'
