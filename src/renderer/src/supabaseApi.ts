@@ -534,10 +534,15 @@ export const supabaseApi = {
           id: `${orderId}-item-${idx}`,
           order_id: orderId,
           product_id: it.productId,
+          variant_name: it.variantName || null,
           quantity: it.quantity,
           price: it.price
         }))
-        await supabase.from('order_items').insert(orderItems)
+        try {
+          await supabase.from('order_items').insert(orderItems)
+        } catch (itErr) {
+          console.warn('Order items insert note:', itErr)
+        }
 
         // Deduct stock in Supabase
         for (const item of payload.items) {
@@ -547,6 +552,7 @@ export const supabaseApi = {
           }
         }
 
+        syncManager.setOnline(true)
         return { success: true, orderId, orderNumber }
       }
     } catch (e) {
@@ -574,50 +580,48 @@ export const supabaseApi = {
 
   getOrders: async () => {
     try {
-      const { data, error } = await supabase
-        .from('orders')
-        .select(`
-          id,
-          orderNumber:order_number,
-          total,
-          discount,
-          tax,
-          status,
-          cashierId:cashier_id,
-          customerId:customer_id,
-          createdAt:created_at,
-          cashier:cashiers(name),
-          customer:customers(name),
-          order_items(
-            productId:product_id,
-            quantity,
-            price,
-            product:products(name, category)
-          )
-        `)
-        .order('created_at', { ascending: false })
+      const [ordersRes, itemsRes, cashiersRes, customersRes, productsRes] = await Promise.all([
+        supabase.from('orders').select('*').order('created_at', { ascending: false }).limit(150),
+        supabase.from('order_items').select('*').limit(500),
+        supabase.from('cashiers').select('id, name'),
+        supabase.from('customers').select('id, name'),
+        supabase.from('products').select('id, name, category')
+      ])
 
-      if (!error && data) {
-        const fullOrders = data.map((order: any) => ({
+      if (ordersRes.data && Array.isArray(ordersRes.data)) {
+        const cashiersMap = new Map((cashiersRes.data || []).map((c: any) => [c.id, c.name]))
+        const customersMap = new Map((customersRes.data || []).map((c: any) => [c.id, c.name]))
+        const productsMap = new Map((productsRes.data || []).map((p: any) => [p.id, p]))
+        
+        const itemsByOrder: { [key: string]: any[] } = {}
+        for (const it of (itemsRes.data || [])) {
+          if (!itemsByOrder[it.order_id]) itemsByOrder[it.order_id] = []
+          const prod = productsMap.get(it.product_id)
+          itemsByOrder[it.order_id].push({
+            productId: it.product_id,
+            name: prod?.name || 'Item',
+            category: prod?.category || '',
+            variantName: it.variant_name || '',
+            quantity: Number(it.quantity || 1),
+            price: Number(it.price || 0)
+          })
+        }
+
+        const fullOrders = ordersRes.data.map((order: any) => ({
           id: order.id,
-          orderNumber: order.orderNumber,
+          orderNumber: order.order_number || order.orderNumber,
           total: Number(order.total),
           discount: Number(order.discount || 0),
           tax: Number(order.tax || 0),
           status: order.status,
-          cashierId: order.cashierId,
-          customerId: order.customerId,
-          createdAt: Number(order.createdAt),
-          cashierName: order.cashier?.name || 'Unknown',
-          customerName: order.customer?.name || '',
-          items: (order.order_items || []).map((it: any) => ({
-            productId: it.productId,
-            name: it.product?.name || 'Item',
-            category: it.product?.category || '',
-            quantity: it.quantity,
-            price: Number(it.price)
-          }))
+          cashierId: order.cashier_id || order.cashierId,
+          customerId: order.customer_id || order.customerId,
+          createdAt: Number(order.created_at || order.createdAt),
+          cashierName: cashiersMap.get(order.cashier_id) || (order.cashier_id === 'cashier-admin' ? 'Admin' : 'Staff'),
+          customerName: customersMap.get(order.customer_id) || '',
+          items: itemsByOrder[order.id] || []
         }))
+
         syncManager.setOnline(true)
         syncManager.setCache('orders', fullOrders)
         return fullOrders

@@ -12,6 +12,8 @@ import {
   ArrowUpRight,
   ClipboardList
 } from 'lucide-react'
+import logoSrc from '../assets/logo.jpeg'
+import { syncManager } from '../services/syncManager'
 
 interface OrderItem {
   productId: string
@@ -37,9 +39,9 @@ interface Order {
 }
 
 export function Dashboard() {
-  const [allOrders, setAllOrders] = useState<Order[]>([])
-  const [products, setProducts] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
+  const [allOrders, setAllOrders] = useState<Order[]>(() => syncManager.getCached<Order[]>('orders', []))
+  const [products, setProducts] = useState<any[]>(() => syncManager.getCached<any[]>('products', []))
+  const [loading, setLoading] = useState<boolean>(() => syncManager.getCached<Order[]>('orders', []).length === 0 && syncManager.getCached<any[]>('products', []).length === 0)
   
   // Date Filtering states
   const [filterMode, setFilterMode] = useState<'today' | 'date' | 'month'>('today')
@@ -64,34 +66,37 @@ export function Dashboard() {
   const [activeOrder, setActiveOrder] = useState<Order | null>(null)
   
   // Business settings fallback
-  const [settings, setSettings] = useState({
+  const [settings, setSettings] = useState(() => syncManager.getCached<any>('settings', {
     businessName: 'YOLO BITES',
     receiptAddress: 'SHOP G9, A.M STORE ALIYU MAKAMA ROAD,\nBARNAWA, KADUNA , KADUNA STATE,\nNIGERIA',
     phones: '07013974928, 07044030444'
-  })
+  }))
 
   useEffect(() => {
     loadData()
   }, [])
 
   const loadData = async () => {
-    setLoading(true)
+    if (allOrders.length === 0 && products.length === 0) {
+      setLoading(true)
+    }
     try {
-      // @ts-ignore
-      const ordersData = await window.api.getOrders()
-      setAllOrders(ordersData || [])
-
-      // @ts-ignore
-      const productsData = await window.api.getProducts()
-      setProducts(productsData || [])
-      
-      // @ts-ignore
-      const settingsData = await window.api.getSettings()
+      const [ordersData, productsData, settingsData] = await Promise.all([
+        // @ts-ignore
+        window.api.getOrders(),
+        // @ts-ignore
+        window.api.getProducts(),
+        // @ts-ignore
+        window.api.getSettings()
+      ])
+      if (ordersData && Array.isArray(ordersData)) setAllOrders(ordersData)
+      if (productsData && Array.isArray(productsData)) setProducts(productsData)
       if (settingsData) setSettings(settingsData)
     } catch (e) {
       console.error('Failed to load dashboard data:', e)
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   // Get local date string YYYY-MM-DD from timestamp
@@ -180,11 +185,38 @@ export function Dashboard() {
     return '🥤'
   }
 
-  if (loading) {
+  if (loading && allOrders.length === 0) {
     return (
-      <div className="p-8 h-full flex flex-col items-center justify-center text-gray-500">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-yolo-red mb-4"></div>
-        <p className="font-medium">Loading records & metrics...</p>
+      <div className="p-8 h-full flex flex-col items-center justify-center text-gray-500 overflow-y-auto">
+        <div className="relative flex items-center justify-center mb-4">
+          <div className="w-16 h-16 rounded-2xl bg-white shadow-lg border border-gray-100 flex items-center justify-center p-2 relative overflow-hidden z-10">
+            <img src={logoSrc} alt="YOLO BITES" className="w-full h-full object-contain rounded-xl animate-pulse" />
+          </div>
+          <div className="absolute -inset-2.5 rounded-[26px] border-2 border-dashed border-yolo-red/50 animate-spin pointer-events-none" />
+        </div>
+        <div className="text-center mb-6">
+          <h3 className="text-base font-bold text-yolo-dark">Loading Analytics & Transactions...</h3>
+          <p className="text-xs text-gray-400 mt-0.5">Calculating revenue, orders, and sales reports</p>
+        </div>
+
+        {/* Skeleton Stat Cards */}
+        <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+          {[1, 2, 3].map(i => (
+            <div key={i} className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm animate-pulse">
+              <div className="w-12 h-12 rounded-2xl bg-gray-100 mb-4" />
+              <div className="h-4 bg-gray-200 rounded w-1/2 mb-2" />
+              <div className="h-7 bg-gray-200 rounded w-3/4" />
+            </div>
+          ))}
+        </div>
+
+        {/* Skeleton Table */}
+        <div className="w-full max-w-4xl bg-white rounded-3xl p-6 border border-gray-100 shadow-sm animate-pulse flex flex-col gap-3">
+          <div className="h-5 bg-gray-200 rounded w-1/4 mb-2" />
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} className="h-12 bg-gray-50 rounded-xl w-full" />
+          ))}
+        </div>
       </div>
     )
   }
