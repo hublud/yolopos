@@ -42,12 +42,12 @@ interface Order {
 }
 
 export function Dashboard() {
-  const [allOrders, setAllOrders] = useState<Order[]>(() => syncManager.getCached<Order[]>('orders', []))
-  const [products, setProducts] = useState<any[]>(() => syncManager.getCached<any[]>('products', []))
-  const [loading, setLoading] = useState<boolean>(() => syncManager.getCached<Order[]>('orders', []).length === 0 && syncManager.getCached<any[]>('products', []).length === 0)
+  const [allOrders, setAllOrders] = useState<Order[]>([])
+  const [products, setProducts] = useState<any[]>([])
+  const [loading, setLoading] = useState<boolean>(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
   
-  // Date Filtering states - default to 'all' so all cloud database transactions are shown on any PC/phone
+  // Date Filtering states - default to 'all' so all database transactions are shown
   const [filterMode, setFilterMode] = useState<'all' | 'today' | 'date' | 'month'>('all')
   
   // Default values for pickers (local timezone)
@@ -157,7 +157,7 @@ export function Dashboard() {
   // Search orders
   const searchedOrders = filteredOrders.filter(order => {
     if (!order) return false
-    const query = searchQuery.toLowerCase().trim()
+    const query = String(searchQuery || '').toLowerCase().trim()
     if (!query) return true
     const orderNum = String(order.orderNumber || order.id || '').toLowerCase()
     const cashierName = String(order.cashierName || '').toLowerCase()
