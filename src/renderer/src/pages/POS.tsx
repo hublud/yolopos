@@ -67,7 +67,7 @@ export function POS({ cashier, products, settings, loading }: { cashier: any; pr
 
   const filteredProducts = products.filter(p => {
     const matchesCategory = category === 'All' || p.category === category
-    const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase())
+    const matchesSearch = (p?.name || '').toLowerCase().includes((search || '').toLowerCase())
     return matchesCategory && matchesSearch
   })
 
@@ -142,6 +142,7 @@ export function POS({ cashier, products, settings, loading }: { cashier: any; pr
       items: cart.map(item => ({
         productId: item.productId || item.id,
         name: item.name,
+        category: item.category || 'Mains',
         variantName: item.variantName,
         quantity: item.quantity,
         price: item.price

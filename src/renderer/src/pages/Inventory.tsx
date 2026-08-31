@@ -261,8 +261,8 @@ export function Inventory({ products: propProducts, loading: propLoading, onRefr
   }
 
   const filteredProducts = products.filter((p: any) => 
-    p.name.toLowerCase().includes(search.toLowerCase()) || 
-    p.category.toLowerCase().includes(search.toLowerCase())
+    (p?.name || '').toLowerCase().includes((search || '').toLowerCase()) || 
+    (p?.category || '').toLowerCase().includes((search || '').toLowerCase())
   )
 
   return (
