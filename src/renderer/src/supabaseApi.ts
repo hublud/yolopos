@@ -501,16 +501,29 @@ export const supabaseApi = {
 
     // 3. Save order into local orders cache
     const orders = syncManager.getCached<any[]>('orders', [])
+    const enrichedItems = payload.items.map(it => {
+      const prod = products.find(p => p.id === it.productId)
+      return {
+        productId: it.productId,
+        name: it.name || prod?.name || 'Item',
+        category: prod?.category || 'Mains',
+        variantName: it.variantName || '',
+        quantity: Number(it.quantity || 1),
+        price: Number(it.price || 0)
+      }
+    })
     const newOrderRecord = {
       id: orderId,
       orderNumber,
-      total: payload.total,
-      discount: payload.discount || 0,
-      tax: payload.tax || 0,
+      total: Number(payload.total),
+      discount: Number(payload.discount || 0),
+      tax: Number(payload.tax || 0),
+      status: 'completed',
       cashierId: payload.cashierId,
+      cashierName: payload.cashierId === 'cashier-admin' ? 'Admin' : 'Staff',
       customerId: payload.customerId,
       createdAt,
-      items: payload.items
+      items: enrichedItems
     }
     orders.unshift(newOrderRecord)
     syncManager.setCache('orders', orders)

@@ -100,13 +100,17 @@ export function Dashboard() {
   }
 
   // Get local date string YYYY-MM-DD from timestamp
-  const getLocalDateString = (timestamp: number) => {
-    const d = new Date(timestamp)
+  const getLocalDateString = (timestamp: any) => {
+    if (!timestamp) return getTodayString()
+    const num = Number(timestamp)
+    const d = !isNaN(num) && num > 0 ? new Date(num) : new Date(timestamp)
+    if (isNaN(d.getTime())) return getTodayString()
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   }
 
   // Filter orders based on selected mode
   const filteredOrders = allOrders.filter(order => {
+    if (!order) return false
     const orderDateStr = getLocalDateString(order.createdAt) // YYYY-MM-DD
     const orderMonthStr = orderDateStr.substring(0, 7) // YYYY-MM
 
@@ -122,36 +126,40 @@ export function Dashboard() {
 
   // Search orders
   const searchedOrders = filteredOrders.filter(order => {
+    if (!order) return false
     const query = searchQuery.toLowerCase().trim()
     if (!query) return true
-    return (
-      order.orderNumber.toLowerCase().includes(query) ||
-      (order.cashierName || '').toLowerCase().includes(query) ||
-      (order.customerName || '').toLowerCase().includes(query)
-    )
+    const orderNum = String(order.orderNumber || order.id || '').toLowerCase()
+    const cashierName = String(order.cashierName || '').toLowerCase()
+    const customerName = String(order.customerName || '').toLowerCase()
+    return orderNum.includes(query) || cashierName.includes(query) || customerName.includes(query)
   })
 
   // Calculate Metrics
-  const totalRevenue = filteredOrders.reduce((sum, order) => sum + order.total, 0)
+  const totalRevenue = filteredOrders.reduce((sum, order) => sum + (Number(order?.total) || 0), 0)
   const totalOrdersCount = filteredOrders.length
   const averageOrderValue = totalOrdersCount > 0 ? totalRevenue / totalOrdersCount : 0
-  const lowStockAlertsCount = products.filter(p => p.stock <= 5).length
+  const lowStockAlertsCount = products.filter(p => Number(p?.stock || 0) <= 5).length
 
   // Calculate Top Selling Items
   const itemSalesMap: { [productId: string]: { name: string; category: string; quantity: number; revenue: number } } = {}
   filteredOrders.forEach(order => {
-    if (order.items && Array.isArray(order.items)) {
+    if (order && order.items && Array.isArray(order.items)) {
       order.items.forEach(item => {
-        if (!itemSalesMap[item.productId]) {
-          itemSalesMap[item.productId] = {
-            name: item.name,
-            category: item.category,
+        if (!item) return
+        const pId = String(item.productId || item.name || 'item')
+        if (!itemSalesMap[pId]) {
+          itemSalesMap[pId] = {
+            name: item.name || 'Item',
+            category: item.category || 'Mains',
             quantity: 0,
             revenue: 0
           }
         }
-        itemSalesMap[item.productId].quantity += item.quantity
-        itemSalesMap[item.productId].revenue += item.quantity * item.price
+        const qty = Number(item.quantity || 1)
+        const pr = Number(item.price || 0)
+        itemSalesMap[pId].quantity += qty
+        itemSalesMap[pId].revenue += qty * pr
       })
     }
   })
@@ -163,25 +171,38 @@ export function Dashboard() {
   const maxQuantitySold = topSellingItems.length > 0 ? topSellingItems[0].quantity : 1
 
   // Format Helper
-  const formatCurrency = (val: number) => {
-    return '₦' + val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  const formatCurrency = (val: any) => {
+    const num = Number(val || 0)
+    return '₦' + (isNaN(num) ? '0.00' : num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
   }
 
-  const formatTime = (timestamp: number) => {
-    return new Date(timestamp).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+  const formatTime = (timestamp: any) => {
+    if (!timestamp) return ''
+    const num = Number(timestamp)
+    const d = !isNaN(num) && num > 0 ? new Date(num) : new Date(timestamp)
+    if (isNaN(d.getTime())) return ''
+    return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
   }
 
-  const formatDate = (timestamp: number) => {
-    return new Date(timestamp).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+  const formatDate = (timestamp: any) => {
+    if (!timestamp) return ''
+    const num = Number(timestamp)
+    const d = !isNaN(num) && num > 0 ? new Date(num) : new Date(timestamp)
+    if (isNaN(d.getTime())) return ''
+    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
   }
 
-  const getCategoryEmoji = (category: string) => {
-    const cat = category.toLowerCase()
+  const getCategoryEmoji = (category?: string) => {
+    const cat = String(category || '').toLowerCase()
     if (cat.includes('mocktail')) return '🍹'
     if (cat.includes('cocktail')) return '🍸'
     if (cat.includes('smoothie')) return '🥤'
     if (cat.includes('milkshake') || cat.includes('shake')) return '🥛'
     if (cat.includes('juice')) return '🧃'
+    if (cat.includes('burger')) return '🍔'
+    if (cat.includes('pizza')) return '🍕'
+    if (cat.includes('shawarma')) return '🌯'
+    if (cat.includes('chop')) return '🍗'
     return '🥤'
   }
 
