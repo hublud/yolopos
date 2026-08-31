@@ -233,35 +233,43 @@ export function Dashboard() {
 
   if (loading && allOrders.length === 0) {
     return (
-      <div className="p-8 h-full flex flex-col items-center justify-center text-gray-500 overflow-y-auto">
-        <div className="relative flex items-center justify-center mb-4">
-          <div className="w-16 h-16 rounded-2xl bg-white shadow-lg border border-gray-100 flex items-center justify-center p-2 relative overflow-hidden z-10">
-            <img src={logoSrc} alt="YOLO BITES" className="w-full h-full object-contain rounded-xl animate-pulse" />
-          </div>
-          <div className="absolute -inset-2.5 rounded-[26px] border-2 border-dashed border-yolo-red/50 animate-spin pointer-events-none" />
-        </div>
-        <div className="text-center mb-6">
-          <h3 className="text-base font-bold text-yolo-dark">Loading Analytics & Transactions...</h3>
-          <p className="text-xs text-gray-400 mt-0.5">Calculating revenue, orders, and sales reports</p>
-        </div>
-
-        {/* Skeleton Stat Cards */}
-        <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-          {[1, 2, 3].map(i => (
-            <div key={i} className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm animate-pulse">
-              <div className="w-12 h-12 rounded-2xl bg-gray-100 mb-4" />
-              <div className="h-4 bg-gray-200 rounded w-1/2 mb-2" />
-              <div className="h-7 bg-gray-200 rounded w-3/4" />
+      <div className="p-6 md:p-8 h-full w-full flex flex-col items-center justify-start overflow-y-auto custom-scrollbar bg-gray-50/50">
+        <div className="my-auto py-6 w-full max-w-4xl flex flex-col items-center">
+          
+          {/* Centered Branded Spinner */}
+          <div className="relative flex items-center justify-center mb-4">
+            <div className="w-16 h-16 rounded-2xl bg-white shadow-xl border border-gray-100 flex items-center justify-center p-2.5 relative overflow-hidden z-10">
+              <img src={logoSrc} alt="YOLO BITES" className="w-full h-full object-contain rounded-xl animate-pulse" />
             </div>
-          ))}
-        </div>
+            <div className="absolute -inset-2.5 rounded-[26px] border-2 border-dashed border-yolo-red animate-spin pointer-events-none" />
+          </div>
 
-        {/* Skeleton Table */}
-        <div className="w-full max-w-4xl bg-white rounded-3xl p-6 border border-gray-100 shadow-sm animate-pulse flex flex-col gap-3">
-          <div className="h-5 bg-gray-200 rounded w-1/4 mb-2" />
-          {[1, 2, 3, 4].map(i => (
-            <div key={i} className="h-12 bg-gray-50 rounded-xl w-full" />
-          ))}
+          <div className="text-center mb-8">
+            <h3 className="text-base font-bold text-yolo-dark tracking-tight">Loading Analytics & Transactions...</h3>
+            <p className="text-xs text-gray-400 mt-1">Connecting to cloud and calculating sales metrics</p>
+          </div>
+
+          {/* Skeleton Stat Cards */}
+          <div className="w-full grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm animate-pulse flex items-center justify-between">
+                <div className="flex-1 mr-2">
+                  <div className="h-3 bg-gray-200 rounded w-20 mb-2" />
+                  <div className="h-6 bg-gray-200 rounded w-28" />
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-gray-100 shrink-0" />
+              </div>
+            ))}
+          </div>
+
+          {/* Skeleton Table */}
+          <div className="w-full bg-white rounded-2xl p-5 border border-gray-100 shadow-sm animate-pulse flex flex-col gap-3">
+            <div className="h-4 bg-gray-200 rounded w-36 mb-1" />
+            {[1, 2, 3].map(i => (
+              <div key={i} className="h-10 bg-gray-50 rounded-xl w-full" />
+            ))}
+          </div>
+
         </div>
       </div>
     )
