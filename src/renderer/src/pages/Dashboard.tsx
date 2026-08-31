@@ -19,6 +19,7 @@ interface OrderItem {
   productId: string
   name: string
   category: string
+  variantName?: string
   quantity: number
   price: number
 }
@@ -30,6 +31,7 @@ interface Order {
   discount: number
   tax: number
   status: string
+  paymentMethod?: string
   cashierId: string
   cashierName: string
   customerId?: string
@@ -410,9 +412,11 @@ export function Dashboard() {
                   {searchedOrders.map((order) => (
                     <div 
                       key={order.id} 
-                      className="grid grid-cols-12 py-3 items-center text-xs text-gray-600 hover:bg-gray-50 rounded-xl px-1 transition-colors"
+                      onClick={() => setActiveOrder(order)}
+                      className="grid grid-cols-12 py-3 items-center text-xs text-gray-600 hover:bg-red-50/60 hover:text-yolo-dark cursor-pointer rounded-xl px-2 transition-all active:scale-[0.99] group"
                     >
-                      <div className="col-span-3 font-semibold text-yolo-dark">
+                      <div className="col-span-3 font-bold text-yolo-dark group-hover:text-yolo-red transition-colors flex items-center gap-1.5">
+                        <Receipt size={13} className="text-gray-400 group-hover:text-yolo-red" />
                         #{order.orderNumber}
                       </div>
                       <div className="col-span-3">
@@ -420,19 +424,15 @@ export function Dashboard() {
                         <span className="text-[10px] text-gray-400 block mt-0.5">{formatTime(order.createdAt)}</span>
                       </div>
                       <div className="col-span-3 font-medium text-gray-700">
-                        {order.cashierName}
+                        {order.cashierName || 'Staff'}
                       </div>
                       <div className="col-span-2 text-right font-bold text-yolo-dark">
                         {formatCurrency(order.total)}
                       </div>
                       <div className="col-span-1 text-center">
-                        <button
-                          onClick={() => setActiveOrder(order)}
-                          title="View Receipt"
-                          className="p-1.5 hover:bg-red-50 text-gray-400 hover:text-yolo-red rounded-lg transition-colors"
-                        >
+                        <span className="p-1.5 inline-block group-hover:bg-red-100/70 text-gray-400 group-hover:text-yolo-red rounded-lg transition-all">
                           <Receipt size={14} />
-                        </button>
+                        </span>
                       </div>
                     </div>
                   ))}
@@ -469,20 +469,24 @@ export function Dashboard() {
                             {item.name}
                           </span>
                           <span className="text-[9px] text-gray-400 uppercase tracking-wider">
-                            {item.category}
+                            {item.category || 'Beverage'}
                           </span>
                         </div>
                       </div>
                       <div className="text-right">
-                        <span className="text-xs font-black text-yolo-dark block">{item.quantity} sold</span>
-                        <span className="text-[10px] text-green-600 font-semibold block">{formatCurrency(item.revenue)}</span>
+                        <span className="text-xs font-black text-yolo-dark block">
+                          {item.quantity} sold
+                        </span>
+                        <span className="text-[10px] text-green-600 font-bold">
+                          {formatCurrency(item.revenue)}
+                        </span>
                       </div>
                     </div>
-                    {/* Visual Progress Bar */}
-                    <div className="w-full bg-gray-100 h-2.5 rounded-full overflow-hidden">
+                    {/* Progress Bar Container */}
+                    <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
                       <div 
                         className="bg-yolo-red h-full rounded-full transition-all duration-500" 
-                        style={{ width: `${percentage}%` }}
+                        style={{ width: `${Math.max(percentage, 5)}%` }}
                       ></div>
                     </div>
                   </div>
@@ -534,7 +538,13 @@ export function Dashboard() {
                 </div>
                 <div className="flex justify-between">
                   <span>Cashier Name:</span>
-                  <span className="font-semibold text-yolo-dark">{activeOrder.cashierName}</span>
+                  <span className="font-semibold text-yolo-dark">{activeOrder.cashierName || 'Staff'}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span>Payment Mode:</span>
+                  <span className="font-bold text-[10px] uppercase px-2 py-0.5 rounded-full bg-red-50 text-yolo-red border border-red-100">
+                    {activeOrder.paymentMethod ? (activeOrder.paymentMethod === 'cash' ? '💵 Cash' : activeOrder.paymentMethod === 'pos' ? '💳 POS / Card' : '📱 Transfer') : '💵 Cash'}
+                  </span>
                 </div>
                 {activeOrder.customerName && (
                   <div className="flex justify-between items-center text-yolo-red">
@@ -552,8 +562,14 @@ export function Dashboard() {
                 {activeOrder.items && activeOrder.items.map((item, index) => (
                   <div key={index} className="flex justify-between items-start text-xs">
                     <div className="flex-1 pr-2">
-                      <div className="font-bold text-yolo-dark">
-                        {getCategoryEmoji(item.category)} {item.name}
+                      <div className="font-bold text-yolo-dark flex items-center flex-wrap gap-1">
+                        <span>{getCategoryEmoji(item.category)}</span>
+                        <span>{item.name}</span>
+                        {item.variantName && (
+                          <span className="bg-orange-50 text-orange-600 border border-orange-100 text-[9px] px-1.5 py-0.5 rounded-full font-bold">
+                            {item.variantName}
+                          </span>
+                        )}
                       </div>
                       <div className="text-[10px] text-gray-400 mt-0.5">
                         {item.quantity} x {formatCurrency(item.price)}
