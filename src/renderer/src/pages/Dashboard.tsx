@@ -10,7 +10,8 @@ import {
   User, 
   Award,
   ArrowUpRight,
-  ClipboardList
+  ClipboardList,
+  RefreshCw
 } from 'lucide-react'
 import logoSrc from '../assets/logo.jpeg'
 import { syncManager } from '../services/syncManager'
@@ -44,6 +45,7 @@ export function Dashboard() {
   const [allOrders, setAllOrders] = useState<Order[]>(() => syncManager.getCached<Order[]>('orders', []))
   const [products, setProducts] = useState<any[]>(() => syncManager.getCached<any[]>('products', []))
   const [loading, setLoading] = useState<boolean>(() => syncManager.getCached<Order[]>('orders', []).length === 0 && syncManager.getCached<any[]>('products', []).length === 0)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   
   // Date Filtering states
   const [filterMode, setFilterMode] = useState<'today' | 'date' | 'month'>('today')
@@ -76,10 +78,25 @@ export function Dashboard() {
 
   useEffect(() => {
     loadData()
+
+    // 1. Subscribe to real-time events across all devices
+    const unsubscribe = syncManager.subscribe(() => {
+      loadData(false)
+    })
+
+    // 2. Continuous real-time cloud polling every 5 seconds
+    const interval = setInterval(() => {
+      loadData(false)
+    }, 5000)
+
+    return () => {
+      unsubscribe()
+      clearInterval(interval)
+    }
   }, [])
 
-  const loadData = async () => {
-    if (allOrders.length === 0 && products.length === 0) {
+  const loadData = async (showLoading = true) => {
+    if (showLoading && allOrders.length === 0 && products.length === 0) {
       setLoading(true)
     }
     try {
@@ -97,8 +114,14 @@ export function Dashboard() {
     } catch (e) {
       console.error('Failed to load dashboard data:', e)
     } finally {
-      setLoading(false)
+      if (showLoading) setLoading(false)
+      setIsRefreshing(false)
     }
+  }
+
+  const handleManualRefresh = () => {
+    setIsRefreshing(true)
+    loadData(false)
   }
 
   // Get local date string YYYY-MM-DD from timestamp
@@ -254,65 +277,77 @@ export function Dashboard() {
           <p className="text-sm text-gray-500 mt-1">Monitor sales metrics, transaction histories, and beverage popularity.</p>
         </div>
 
-        {/* Date Filter Controls */}
-        <div className="bg-white p-2 rounded-2xl border border-gray-100 shadow-sm flex flex-wrap items-center gap-2">
-          <div className="flex bg-gray-100 p-1 rounded-xl">
-            <button
-              onClick={() => setFilterMode('today')}
-              className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                filterMode === 'today' 
-                  ? 'bg-white text-yolo-dark shadow-sm' 
-                  : 'text-gray-500 hover:text-yolo-dark'
-              }`}
-            >
-              Today
-            </button>
-            <button
-              onClick={() => setFilterMode('date')}
-              className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                filterMode === 'date' 
-                  ? 'bg-white text-yolo-dark shadow-sm' 
-                  : 'text-gray-500 hover:text-yolo-dark'
-              }`}
-            >
-              Specific Date
-            </button>
-            <button
-              onClick={() => setFilterMode('month')}
-              className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                filterMode === 'month' 
-                  ? 'bg-white text-yolo-dark shadow-sm' 
-                  : 'text-gray-500 hover:text-yolo-dark'
-              }`}
-            >
-              Monthly
-            </button>
+        {/* Date Filter Controls & Refresh */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={handleManualRefresh}
+            disabled={isRefreshing}
+            className="bg-white hover:bg-gray-50 border border-gray-100 shadow-sm px-3.5 py-2 rounded-2xl text-gray-600 hover:text-yolo-dark active:scale-95 transition-all flex items-center gap-1.5 text-xs font-semibold"
+            title="Fetch Latest Real-time Transactions from Cloud"
+          >
+            <RefreshCw size={13} className={isRefreshing ? 'animate-spin text-yolo-red' : 'text-yolo-red'} />
+            <span>Live Refresh</span>
+          </button>
+
+          <div className="bg-white p-2 rounded-2xl border border-gray-100 shadow-sm flex flex-wrap items-center gap-2">
+            <div className="flex bg-gray-100 p-1 rounded-xl">
+              <button
+                onClick={() => setFilterMode('today')}
+                className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  filterMode === 'today' 
+                    ? 'bg-white text-yolo-dark shadow-sm' 
+                    : 'text-gray-500 hover:text-yolo-dark'
+                }`}
+              >
+                Today
+              </button>
+              <button
+                onClick={() => setFilterMode('date')}
+                className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  filterMode === 'date' 
+                    ? 'bg-white text-yolo-dark shadow-sm' 
+                    : 'text-gray-500 hover:text-yolo-dark'
+                }`}
+              >
+                Specific Date
+              </button>
+              <button
+                onClick={() => setFilterMode('month')}
+                className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  filterMode === 'month' 
+                    ? 'bg-white text-yolo-dark shadow-sm' 
+                    : 'text-gray-500 hover:text-yolo-dark'
+                }`}
+              >
+                Monthly
+              </button>
+            </div>
+
+            {/* Conditional Picker Fields */}
+            {filterMode === 'date' && (
+              <div className="flex items-center gap-2 pl-2">
+                <Calendar size={14} className="text-gray-400" />
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="text-xs font-semibold border-0 focus:ring-0 text-gray-700 bg-transparent p-0 cursor-pointer outline-none"
+                />
+              </div>
+            )}
+
+            {filterMode === 'month' && (
+              <div className="flex items-center gap-2 pl-2">
+                <Calendar size={14} className="text-gray-400" />
+                <input
+                  type="month"
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  className="text-xs font-semibold border-0 focus:ring-0 text-gray-700 bg-transparent p-0 cursor-pointer outline-none"
+                />
+              </div>
+            )}
           </div>
-
-          {/* Conditional Picker Fields */}
-          {filterMode === 'date' && (
-            <div className="flex items-center gap-2 pl-2">
-              <Calendar size={14} className="text-gray-400" />
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="text-xs font-semibold border-0 focus:ring-0 text-gray-700 bg-transparent p-0 cursor-pointer outline-none"
-              />
-            </div>
-          )}
-
-          {filterMode === 'month' && (
-            <div className="flex items-center gap-2 pl-2">
-              <Calendar size={14} className="text-gray-400" />
-              <input
-                type="month"
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
-                className="text-xs font-semibold border-0 focus:ring-0 text-gray-700 bg-transparent p-0 cursor-pointer outline-none"
-              />
-            </div>
-          )}
         </div>
       </div>
 

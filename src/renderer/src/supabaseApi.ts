@@ -580,7 +580,9 @@ export const supabaseApi = {
         for (const item of payload.items) {
           const p = products.find(prod => prod.id === item.productId)
           if (p) {
-            await supabase.from('products').update({ stock: p.stock }).eq('id', item.productId).catch(() => {})
+            try {
+              await supabase.from('products').update({ stock: p.stock }).eq('id', item.productId)
+            } catch {}
           }
         }
 

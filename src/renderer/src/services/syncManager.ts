@@ -40,6 +40,24 @@ class SyncManager {
         this.syncPendingData()
       }
     }, 1500)
+
+    // Real-time Cloud Sync across all devices and browsers
+    try {
+      supabase
+        .channel('yolo-realtime-channel')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
+          this.notify()
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => {
+          this.notify()
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, () => {
+          this.notify()
+        })
+        .subscribe()
+    } catch (e) {
+      console.warn('Realtime channel subscription note:', e)
+    }
   }
 
   public getNetworkStatus() {
