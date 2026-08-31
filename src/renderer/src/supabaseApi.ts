@@ -587,6 +587,8 @@ export const supabaseApi = {
         }
 
         syncManager.setOnline(true)
+        // Immediately refresh full order list from cloud
+        supabaseApi.getOrders().then(() => syncManager.notify()).catch(() => {})
         return { success: true, orderId, orderNumber }
       }
     } catch (e) {
@@ -615,8 +617,8 @@ export const supabaseApi = {
   getOrders: async () => {
     try {
       const [ordersRes, itemsRes, cashiersRes, customersRes, productsRes] = await Promise.all([
-        supabase.from('orders').select('*').order('created_at', { ascending: false }).limit(150),
-        supabase.from('order_items').select('*').limit(500),
+        supabase.from('orders').select('*').order('created_at', { ascending: false }).limit(500),
+        supabase.from('order_items').select('*').limit(2000),
         supabase.from('cashiers').select('id, name'),
         supabase.from('customers').select('id, name'),
         supabase.from('products').select('id, name, category')

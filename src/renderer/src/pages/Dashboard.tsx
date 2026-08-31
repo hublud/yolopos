@@ -47,8 +47,8 @@ export function Dashboard() {
   const [loading, setLoading] = useState<boolean>(() => syncManager.getCached<Order[]>('orders', []).length === 0 && syncManager.getCached<any[]>('products', []).length === 0)
   const [isRefreshing, setIsRefreshing] = useState(false)
   
-  // Date Filtering states
-  const [filterMode, setFilterMode] = useState<'all' | 'today' | 'date' | 'month'>('today')
+  // Date Filtering states - default to 'all' so all cloud database transactions are shown on any PC/phone
+  const [filterMode, setFilterMode] = useState<'all' | 'today' | 'date' | 'month'>('all')
   
   // Default values for pickers (local timezone)
   const getTodayString = () => {
