@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import logoSrc from '../assets/logo.jpeg'
 import { syncManager } from '../services/syncManager'
+import { api } from '../api'
 
 interface OrderItem {
   productId: string
@@ -101,12 +102,9 @@ export function Dashboard() {
     }
     try {
       const [ordersData, productsData, settingsData] = await Promise.all([
-        // @ts-ignore
-        window.api.getOrders(),
-        // @ts-ignore
-        window.api.getProducts(),
-        // @ts-ignore
-        window.api.getSettings()
+        api.getOrders(),
+        api.getProducts(),
+        api.getSettings()
       ])
       if (ordersData && Array.isArray(ordersData)) setAllOrders(ordersData)
       if (productsData && Array.isArray(productsData)) setProducts(productsData)

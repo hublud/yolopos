@@ -237,6 +237,15 @@ const SEED_PRODUCTS = [
   { id: 'drk-12', name: 'Water', price: 500, category: 'Drinks', image: 'drink.png', stock: 50, createdAt: now, variants: [] }
 ]
 
+export interface ApiResult {
+  success: boolean
+  error?: string
+  id?: string
+  orderId?: string
+  orderNumber?: string
+  [key: string]: any
+}
+
 export const supabaseApi = {
   // 1. CASHIERS & AUTH
   loginPin: async (pin: string) => {
@@ -276,7 +285,7 @@ export const supabaseApi = {
     return syncManager.getCached<any[]>('cashiers', SEED_CASHIERS)
   },
 
-  updateCashierPin: async (id: string, pin: string) => {
+  updateCashierPin: async (id: string, pin: string): Promise<ApiResult> => {
     const cashiers = syncManager.getCached<any[]>('cashiers', SEED_CASHIERS)
     const idx = cashiers.findIndex(c => c.id === id)
     if (idx !== -1) {
@@ -298,7 +307,7 @@ export const supabaseApi = {
     return { success: true }
   },
 
-  addCashier: async (data: { name: string; pin: string; role: string }) => {
+  addCashier: async (data: { name: string; pin: string; role: string }): Promise<ApiResult> => {
     const id = generateUUID()
     const newCashier = { id, name: data.name, pin: data.pin, role: data.role }
     
@@ -345,7 +354,7 @@ export const supabaseApi = {
     return syncManager.getCached<any[]>('products', SEED_PRODUCTS)
   },
 
-  addProduct: async (data: { name: string; price: number; category: string; image: string; stock: number; variants?: ProductVariant[] }) => {
+  addProduct: async (data: { name: string; price: number; category: string; image: string; stock: number; variants?: ProductVariant[] }): Promise<ApiResult> => {
     const id = generateUUID()
     const newProduct = {
       id,
@@ -391,7 +400,7 @@ export const supabaseApi = {
     return { success: true, id }
   },
 
-  updateProduct: async (id: string, data: { name: string; price: number; category: string; image: string; variants?: ProductVariant[] }) => {
+  updateProduct: async (id: string, data: { name: string; price: number; category: string; image: string; variants?: ProductVariant[] }): Promise<ApiResult> => {
     const products = syncManager.getCached<any[]>('products', SEED_PRODUCTS)
     const idx = products.findIndex(p => p.id === id)
     if (idx !== -1) {
@@ -432,7 +441,7 @@ export const supabaseApi = {
     return { success: true }
   },
 
-  updateProductStock: async (data: { productId: string; change: number; reason: string }) => {
+  updateProductStock: async (data: { productId: string; change: number; reason: string }): Promise<ApiResult> => {
     const products = syncManager.getCached<any[]>('products', SEED_PRODUCTS)
     const idx = products.findIndex(p => p.id === data.productId)
     let newStock = 0
@@ -444,14 +453,17 @@ export const supabaseApi = {
 
     try {
       const { error: pErr } = await supabase.from('products').update({ stock: newStock }).eq('id', data.productId)
-      const { error: lErr } = await supabase.from('inventory_logs').insert({
-        id: 'log-' + generateUUID(),
-        product_id: data.productId,
-        change: Number(data.change),
-        reason: data.reason,
-        created_at: Date.now()
-      })
-      if (!pErr && !lErr) return { success: true }
+      if (!pErr) {
+        await supabase.from('inventory_logs').insert({
+          id: 'log-' + generateUUID(),
+          product_id: data.productId,
+          change: Number(data.change),
+          reason: data.reason || 'manual',
+          created_at: Date.now()
+        })
+        syncManager.setOnline(true)
+        return { success: true }
+      }
     } catch {
       // Enqueue
     }
@@ -465,15 +477,16 @@ export const supabaseApi = {
     return { success: true }
   },
 
-  // 3. ORDERS & SALES
+  // 3. ORDERS & CHECKOUT
   createOrder: async (payload: {
     cashierId: string
+    paymentMethod?: string
     customerId?: string
     items: { productId: string; name?: string; variantName?: string; quantity: number; price: number }[]
     total: number
     discount: number
     tax: number
-  }) => {
+  }): Promise<ApiResult> => {
     const orderId = generateUUID()
     const orderNumber = Math.floor(100000 + Math.random() * 900000).toString()
     const createdAt = Date.now()
@@ -706,7 +719,7 @@ export const supabaseApi = {
     return syncManager.getCached<any[]>('customers', [])
   },
 
-  addCustomer: async (data: { name: string; phone: string }) => {
+  addCustomer: async (data: { name: string; phone: string }): Promise<ApiResult> => {
     const customers = syncManager.getCached<any[]>('customers', [])
     const existing = customers.find(c => c.phone === data.phone)
     if (existing) {
@@ -777,7 +790,7 @@ export const supabaseApi = {
     return syncManager.getCached<any>('settings', DEFAULT_SETTINGS)
   },
 
-  saveSettings: async (data: { businessName: string; taxRate: number; receiptAddress: string; phones: string }) => {
+  saveSettings: async (data: { businessName: string; taxRate: number; receiptAddress: string; phones: string }): Promise<ApiResult> => {
     const payload = {
       business_name: data.businessName,
       tax_rate: Number(data.taxRate),

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Printer, Database, Store, Save, RefreshCw, Users, Key, Plus, X, Shield, Eye, EyeOff } from 'lucide-react'
+import { api } from '../api'
 
 interface SettingsProps {
   settings: {
@@ -43,16 +44,12 @@ export function Settings({ settings, onSettingsSaved }: SettingsProps) {
       setReceiptAddress(settings.receiptAddress || '')
       setPhones(settings.phones || '')
     }
-  }, [settings])
-
-  useEffect(() => {
     loadCashiers()
-  }, [])
+  }, [settings])
 
   const loadCashiers = async () => {
     try {
-      // @ts-ignore
-      const data = await window.api.getCashiers()
+      const data = await api.getCashiers()
       setCashiersList(data || [])
     } catch (err) {
       console.error(err)
@@ -66,8 +63,7 @@ export function Settings({ settings, onSettingsSaved }: SettingsProps) {
     setSuccess(false)
 
     try {
-      // @ts-ignore
-      const result = await window.api.saveSettings({
+      const result = await api.saveSettings({
         businessName,
         taxRate: Number(taxRate),
         receiptAddress,
@@ -97,8 +93,7 @@ export function Settings({ settings, onSettingsSaved }: SettingsProps) {
     }
     setSaving(true)
     try {
-      // @ts-ignore
-      const result = await window.api.updateCashierPin(selectedCashier.id, newPin)
+      const result = await api.updateCashierPin(selectedCashier.id, newPin)
       if (result.success) {
         setShowPinModal(false)
         setSelectedCashier(null)
@@ -123,8 +118,7 @@ export function Settings({ settings, onSettingsSaved }: SettingsProps) {
     }
     setSaving(true)
     try {
-      // @ts-ignore
-      const result = await window.api.addCashier({
+      const result = await api.addCashier({
         name: addName,
         pin: addPin,
         role: addRole

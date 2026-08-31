@@ -4,6 +4,7 @@ import { ReceiptModal } from '../components/ReceiptModal'
 import { ProductImage } from '../components/ProductImage'
 // @ts-ignore
 import logoSrc from '../assets/logo.jpeg'
+import { api } from '../api'
 
 const PAYMENT_METHODS = [
   { id: 'cash', label: 'Cash', icon: Banknote, color: 'bg-green-50 text-green-700 border-green-300', active: 'bg-green-600 text-white border-green-600' },
@@ -154,8 +155,7 @@ export function POS({ cashier, products, settings, loading }: { cashier: any; pr
     }
 
     try {
-      // @ts-ignore
-      const result = await window.api.createOrder(payload)
+      const result = await api.createOrder(payload)
       if (result.success) {
         setReceiptData({
           orderNumber: result.orderNumber,

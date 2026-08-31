@@ -7,6 +7,7 @@ import { Inventory } from './pages/Inventory'
 import { Customers } from './pages/Customers'
 import { Settings } from './pages/Settings'
 import { syncManager } from './services/syncManager'
+import { api } from './api'
 
 class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean; error: any }> {
   constructor(props: { children: React.ReactNode }) {
@@ -74,8 +75,7 @@ function App() {
 
   const loadProducts = async () => {
     try {
-      // @ts-ignore
-      const data = await window.api.getProducts()
+      const data = await api.getProducts()
       if (data && Array.isArray(data)) {
         setProducts(data)
       }
@@ -88,8 +88,7 @@ function App() {
 
   const loadSettings = async () => {
     try {
-      // @ts-ignore
-      const data = await window.api.getSettings()
+      const data = await api.getSettings()
       if (data) setSettings(data)
     } catch (e) {
       console.error(e)

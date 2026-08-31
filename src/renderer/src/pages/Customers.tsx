@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Users, Search, Plus, Star, X } from 'lucide-react'
+import { api } from '../api'
 
 export function Customers() {
   const [customers, setCustomers] = useState<any[]>([])
@@ -15,8 +16,7 @@ export function Customers() {
 
   const loadCustomers = async () => {
     try {
-      // @ts-ignore
-      const data = await window.api.getCustomers()
+      const data = await api.getCustomers()
       setCustomers(data)
     } catch (e) {
       console.error(e)
@@ -28,8 +28,7 @@ export function Customers() {
     if (!name || !phone) return
     setLoading(true)
     try {
-      // @ts-ignore
-      const result = await window.api.addCustomer({ name, phone })
+      const result = await api.addCustomer({ name, phone })
       if (result.success) {
         setName('')
         setPhone('')

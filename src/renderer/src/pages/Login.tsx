@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { api } from '../api'
 
 export function Login({ onLogin }) {
   const [pin, setPin] = useState('')
@@ -26,8 +27,7 @@ export function Login({ onLogin }) {
   const handleLogin = async () => {
     setLoading(true)
     try {
-      // @ts-ignore
-      const user = await window.api.loginPin(pin)
+      const user = await api.loginPin(pin)
       if (user) {
         onLogin(user)
       } else {

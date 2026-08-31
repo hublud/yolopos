@@ -3,6 +3,7 @@ import { Package, Search, Plus, Edit2, X, TrendingUp, Image as ImageIcon, Layers
 import { ProductImage } from '../components/ProductImage'
 import logoSrc from '../assets/logo.jpeg'
 import { syncManager } from '../services/syncManager'
+import { api } from '../api'
 
 export interface VariantItem {
   id: string
@@ -164,8 +165,7 @@ export function Inventory({ products: propProducts, loading: propLoading, onRefr
         stock: parseInt(newStock),
         variants: newVariants.filter(v => v.name.trim().length > 0)
       }
-      // @ts-ignore
-      const result = await window.api.addProduct(payload)
+      const result = await api.addProduct(payload)
       if (result.success) {
         setNewName('')
         setNewPrice('5000')
@@ -199,8 +199,7 @@ export function Inventory({ products: propProducts, loading: propLoading, onRefr
         image: editImage || 'drink.png',
         variants: editVariants.filter(v => v.name.trim().length > 0)
       }
-      // @ts-ignore
-      const result = await window.api.updateProduct(editId, payload)
+      const result = await api.updateProduct(editId, payload)
       if (result.success) {
         setEditId('')
         setEditName('')
@@ -231,8 +230,7 @@ export function Inventory({ products: propProducts, loading: propLoading, onRefr
         change: parseInt(adjustChange),
         reason: adjustReason
       }
-      // @ts-ignore
-      const result = await window.api.updateProductStock(payload)
+      const result = await api.updateProductStock(payload)
       if (result.success) {
         setAdjustChange('')
         setAdjustReason('restock')
