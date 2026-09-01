@@ -554,6 +554,7 @@ export const supabaseApi = {
         discount: Number(payload.discount || 0),
         tax: Number(payload.tax || 0),
         status: 'completed',
+        payment_method: payload.paymentMethod || 'cash',
         cashier_id: validCashierId,
         created_at: createdAt
       }
@@ -615,6 +616,7 @@ export const supabaseApi = {
         total: payload.total,
         discount: payload.discount,
         tax: payload.tax,
+        paymentMethod: payload.paymentMethod || 'cash',
         cashierId: payload.cashierId,
         customerId: payload.customerId,
         createdAt
@@ -629,21 +631,19 @@ export const supabaseApi = {
 
   getOrders: async () => {
     try {
-      const [ordersRes, itemsRes, cashiersRes, customersRes, productsRes] = await Promise.all([
-        supabase.from('orders').select('*').order('created_at', { ascending: false }).limit(500),
-        supabase.from('order_items').select('*').limit(2000),
-        supabase.from('cashiers').select('id, name'),
-        supabase.from('customers').select('id, name'),
-        supabase.from('products').select('id, name, category')
-      ])
+      const ordersRes = await supabase.from('orders').select('*').order('created_at', { ascending: false }).limit(500)
+      const itemsRes = await supabase.from('order_items').select('*').limit(2000).catch(() => ({ data: [] }))
+      const cashiersRes = await supabase.from('cashiers').select('id, name').catch(() => ({ data: [] }))
+      const customersRes = await supabase.from('customers').select('id, name').catch(() => ({ data: [] }))
+      const productsRes = await supabase.from('products').select('id, name, category').catch(() => ({ data: [] }))
 
       if (ordersRes.data && Array.isArray(ordersRes.data)) {
-        const cashiersMap = new Map((cashiersRes.data || []).map((c: any) => [c.id, c.name]))
-        const customersMap = new Map((customersRes.data || []).map((c: any) => [c.id, c.name]))
-        const productsMap = new Map((productsRes.data || []).map((p: any) => [p.id, p]))
+        const cashiersMap = new Map(((cashiersRes as any).data || []).map((c: any) => [c.id, c.name]))
+        const customersMap = new Map(((customersRes as any).data || []).map((c: any) => [c.id, c.name]))
+        const productsMap = new Map(((productsRes as any).data || []).map((p: any) => [p.id, p]))
         
         const itemsByOrder: { [key: string]: any[] } = {}
-        for (const it of (itemsRes.data || [])) {
+        for (const it of ((itemsRes as any).data || [])) {
           if (!itemsByOrder[it.order_id]) itemsByOrder[it.order_id] = []
           const prod = productsMap.get(it.product_id)
           itemsByOrder[it.order_id].push({
