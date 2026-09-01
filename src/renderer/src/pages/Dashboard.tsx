@@ -379,7 +379,7 @@ export function Dashboard() {
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
           <div>
             <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-1">
-              {filterMode === 'today' ? "Today's Revenue" : filterMode === 'date' ? "Date's Revenue" : "Monthly Revenue"}
+              {filterMode === 'all' ? "Total Revenue" : filterMode === 'today' ? "Today's Revenue" : filterMode === 'date' ? "Date's Revenue" : "Monthly Revenue"}
             </p>
             <h3 className="text-2xl font-black text-yolo-dark">{formatCurrency(totalRevenue)}</h3>
           </div>
