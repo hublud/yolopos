@@ -10,6 +10,9 @@ export interface QueueItem {
 
 type NetworkListener = (isOnline: boolean, pendingCount: number) => void
 
+// Detect if running inside Electron (window.api IPC bridge available)
+const isElectron = typeof window !== 'undefined' && typeof (window as any).api?.pushToQueue === 'function'
+
 class SyncManager {
   private isOnline: boolean = true
   private listeners: NetworkListener[] = []
@@ -19,66 +22,70 @@ class SyncManager {
     window.addEventListener('online', () => {
       this.setOnline(true)
       this.forceCheck()
-      if (this.getQueue().length > 0 && !this.isSyncing) {
-        this.syncPendingData()
-      }
+      this.triggerSync()
     })
     window.addEventListener('offline', () => this.handleNetworkChange(false))
     
-    // Periodically verify internet connectivity and flush pending offline queue
+    // Periodically verify connectivity and flush pending offline queue
     setInterval(() => {
       this.forceCheck()
-      if (this.isOnline && this.getQueue().length > 0 && !this.isSyncing) {
-        this.syncPendingData()
+      if (this.isOnline && !this.isSyncing) {
+        this.getPendingCount().then(count => {
+          if (count > 0) this.syncPendingData()
+        })
       }
     }, 8000)
 
     // Initial connectivity check and sync
     setTimeout(() => {
       this.forceCheck()
-      if (this.getQueue().length > 0 && !this.isSyncing) {
-        this.syncPendingData()
-      }
+      this.triggerSync()
     }, 1500)
 
-    // Real-time Cloud Sync across all devices and browsers
+    // Real-time Cloud Sync across all devices
     try {
       supabase
         .channel('yolo-realtime-channel')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
-          this.notify()
-        })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => {
-          this.notify()
-        })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, () => {
-          this.notify()
-        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => this.notify())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => this.notify())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, () => this.notify())
         .subscribe()
     } catch (e) {
       console.warn('Realtime channel subscription note:', e)
     }
   }
 
+  private async triggerSync() {
+    const count = await this.getPendingCount()
+    if (count > 0 && !this.isSyncing) {
+      this.syncPendingData()
+    }
+  }
+
+  private async getPendingCount(): Promise<number> {
+    const queue = await this.getQueue()
+    return queue.length
+  }
+
   public getNetworkStatus() {
     return {
       isOnline: this.isOnline,
       isSyncing: this.isSyncing,
-      pendingCount: this.getQueue().length
+      pendingCount: 0 // Use async getPendingCount() for accurate count
     }
   }
 
   public subscribe(listener: NetworkListener) {
     this.listeners.push(listener)
-    listener(this.isOnline, this.getQueue().length)
+    this.getPendingCount().then(count => listener(this.isOnline, count))
     return () => {
       this.listeners = this.listeners.filter(l => l !== listener)
     }
   }
 
-  public notify() {
-    const queueLen = this.getQueue().length
-    this.listeners.forEach(l => l(this.isOnline, queueLen))
+  public async notify() {
+    const count = await this.getPendingCount()
+    this.listeners.forEach(l => l(this.isOnline, count))
   }
 
   public setOnline(online: boolean) {
@@ -99,9 +106,6 @@ class SyncManager {
       const isReachable = !error && data !== null
       if (isReachable) {
         this.setOnline(true)
-        if (this.getQueue().length > 0 && !this.isSyncing) {
-          this.syncPendingData()
-        }
         return true
       }
       
@@ -117,13 +121,21 @@ class SyncManager {
 
   private handleNetworkChange(online: boolean) {
     this.setOnline(online)
-    if (online && this.getQueue().length > 0 && !this.isSyncing) {
-      this.syncPendingData()
-    }
+    if (online) this.triggerSync()
   }
 
-  // Queue Management
-  public getQueue(): QueueItem[] {
+  // ── Queue Management ──────────────────────────────────────────────────────────
+  // Uses SQLite (via window.api IPC) in Electron for durability across restarts.
+  // Falls back to localStorage in browser/web environments.
+
+  public async getQueue(): Promise<QueueItem[]> {
+    if (isElectron) {
+      try {
+        return await (window as any).api.getPendingQueue()
+      } catch (e) {
+        console.warn('getQueue IPC failed, using localStorage fallback:', e)
+      }
+    }
     try {
       const stored = localStorage.getItem('pos_offline_queue')
       return stored ? JSON.parse(stored) : []
@@ -132,30 +144,91 @@ class SyncManager {
     }
   }
 
-  private saveQueue(queue: QueueItem[]) {
-    localStorage.setItem('pos_offline_queue', JSON.stringify(queue))
+  private async saveQueue(queue: QueueItem[]) {
+    // In Electron, queue is managed item-by-item via IPC — no bulk save needed
+    if (!isElectron) {
+      localStorage.setItem('pos_offline_queue', JSON.stringify(queue))
+    }
     this.notify()
   }
 
-  public clearQueue(): void {
-    localStorage.removeItem('pos_offline_queue')
+  public async clearQueue(): Promise<void> {
+    if (isElectron) {
+      try {
+        const queue = await this.getQueue()
+        const ids = queue.map(item => item.id)
+        if (ids.length > 0) await (window as any).api.removeFromQueue(ids)
+      } catch (e) {
+        console.warn('clearQueue IPC failed:', e)
+      }
+    } else {
+      localStorage.removeItem('pos_offline_queue')
+    }
     this.notify()
   }
 
-  public enqueue(type: QueueItem['type'], payload: any): string {
-    const queue = this.getQueue()
+  public async enqueue(type: QueueItem['type'], payload: any): Promise<string> {
     const id = 'queue-' + Math.random().toString(36).substring(2, 9) + '-' + Date.now()
-    queue.push({
-      id,
-      type,
-      payload,
-      timestamp: Date.now()
-    })
-    this.saveQueue(queue)
+    const item: QueueItem = { id, type, payload, timestamp: Date.now(), retries: 0 }
+
+    if (isElectron) {
+      try {
+        await (window as any).api.pushToQueue(item)
+        this.notify()
+        return id
+      } catch (e) {
+        console.warn('pushToQueue IPC failed, using localStorage fallback:', e)
+      }
+    }
+    
+    // Fallback: localStorage
+    try {
+      const stored = localStorage.getItem('pos_offline_queue')
+      const queue: QueueItem[] = stored ? JSON.parse(stored) : []
+      queue.push(item)
+      localStorage.setItem('pos_offline_queue', JSON.stringify(queue))
+    } catch {}
+    this.notify()
     return id
   }
 
-  // Cache Utilities
+  private async removeFromQueue(ids: string[]) {
+    if (ids.length === 0) return
+    if (isElectron) {
+      try {
+        await (window as any).api.removeFromQueue(ids)
+        return
+      } catch (e) {
+        console.warn('removeFromQueue IPC failed:', e)
+      }
+    }
+    try {
+      const stored = localStorage.getItem('pos_offline_queue')
+      if (!stored) return
+      const queue: QueueItem[] = JSON.parse(stored)
+      const remaining = queue.filter(item => !ids.includes(item.id))
+      localStorage.setItem('pos_offline_queue', JSON.stringify(remaining))
+    } catch {}
+  }
+
+  private async incrementRetries(id: string) {
+    if (isElectron) {
+      try {
+        await (window as any).api.incrementQueueRetries(id)
+        return
+      } catch {}
+    }
+    try {
+      const stored = localStorage.getItem('pos_offline_queue')
+      if (!stored) return
+      const queue: QueueItem[] = JSON.parse(stored)
+      const idx = queue.findIndex(i => i.id === id)
+      if (idx !== -1) queue[idx].retries = (queue[idx].retries || 0) + 1
+      localStorage.setItem('pos_offline_queue', JSON.stringify(queue))
+    } catch {}
+  }
+
+  // ── Cache Utilities ───────────────────────────────────────────────────────────
   public getCached<T>(key: string, fallback: T): T {
     try {
       const val = localStorage.getItem('pos_cache_' + key)
@@ -173,21 +246,20 @@ class SyncManager {
     }
   }
 
-  // Synchronize all pending offline items to Supabase
+  // ── Sync: Flush Pending Queue to Supabase ─────────────────────────────────────
   public async syncPendingData(skipSyncingFlag = false): Promise<{ success: boolean; syncedCount: number; errors: string[] }> {
     if (this.isSyncing && !skipSyncingFlag) return { success: false, syncedCount: 0, errors: ['Sync already in progress'] }
     
-    const queue = this.getQueue()
-    if (queue.length === 0) {
-      return { success: true, syncedCount: 0, errors: [] }
-    }
+    const queue = await this.getQueue()
+    if (queue.length === 0) return { success: true, syncedCount: 0, errors: [] }
 
     this.isSyncing = true
     this.notify()
 
     const errors: string[] = []
     let syncedCount = 0
-    const remainingQueue: QueueItem[] = []
+    const syncedIds: string[] = []
+    const failedItems: QueueItem[] = []
 
     for (const item of queue) {
       try {
@@ -205,6 +277,7 @@ class SyncManager {
               discount: Number(order.discount || 0),
               tax: Number(order.tax || 0),
               status: order.status || 'completed',
+              payment_method: order.paymentMethod || 'cash',
               created_at: Number(order.createdAt || Date.now())
             }
 
@@ -213,43 +286,34 @@ class SyncManager {
             } else {
               orderPayload.cashier_id = 'cashier-staff'
             }
-
-            if (customerId) {
-              orderPayload.customer_id = customerId
-            }
+            if (customerId) orderPayload.customer_id = customerId
 
             const { error: oErr } = await supabase.from('orders').upsert(orderPayload)
             if (oErr) {
-              console.warn('Order upsert fallback:', oErr)
+              // Retry without cashier_id FK
               const { error: retryErr } = await supabase.from('orders').upsert({
-                id: orderPayload.id,
-                order_number: orderPayload.order_number,
-                total: orderPayload.total,
-                discount: orderPayload.discount,
-                tax: orderPayload.tax,
-                status: 'completed',
-                created_at: orderPayload.created_at
+                ...orderPayload, cashier_id: null
               })
               if (retryErr) err = retryErr
             }
 
-            if (items && Array.isArray(items) && items.length > 0) {
-              const orderItems = items.map((it: any, idx: number) => ({
+            if (!err && items && Array.isArray(items) && items.length > 0) {
+              const orderItemRows = items.map((it: any, idx: number) => ({
                 id: `${order.id}-item-${idx}`,
                 order_id: String(order.id),
-                product_id: String(it.productId || 'main-1'),
+                product_id: String(it.productId),
                 variant_name: it.variantName || null,
+                name: it.name || '',
                 quantity: Number(it.quantity || 1),
                 price: Number(it.price || 0)
               }))
               try {
-                await supabase.from('order_items').upsert(orderItems)
+                await supabase.from('order_items').upsert(orderItemRows)
               } catch (e) {
                 console.warn('Order items sync note:', e)
               }
             }
 
-            // Sync loyalty points increment
             if (customerId && pointsEarned) {
               try {
                 const { data: cust } = await supabase.from('customers').select('loyalty_points').eq('id', customerId).single()
@@ -258,20 +322,16 @@ class SyncManager {
                     loyalty_points: (cust.loyalty_points || 0) + pointsEarned
                   }).eq('id', customerId)
                 }
-              } catch (e) {
-                console.warn('Loyalty points sync note:', e)
-              }
+              } catch {}
             }
             break
           }
 
           case 'UPDATE_STOCK': {
             const { productId, change, reason, newStock } = item.payload
-            // Update product stock
             if (newStock !== undefined) {
               await supabase.from('products').update({ stock: newStock }).eq('id', productId)
             }
-            // Add inventory log
             const { error: lErr } = await supabase.from('inventory_logs').insert({
               id: 'log-' + Math.random().toString(36).substring(2, 9) + '-' + Date.now(),
               product_id: productId,
@@ -326,32 +386,36 @@ class SyncManager {
           console.error(`Failed syncing item ${item.id}:`, err)
           errors.push(`Action ${item.type} failed: ${err.message || JSON.stringify(err)}`)
           const retries = (item.retries || 0) + 1
-          if (retries < 3) {
-            remainingQueue.push({ ...item, retries })
+          if (retries < 5) {
+            await this.incrementRetries(item.id)
+            failedItems.push({ ...item, retries })
           } else {
-            console.warn(`Auto-cleared invalid sync item ${item.id} after 3 retries:`, item)
+            // Exceeded retry limit — remove from queue
+            console.warn(`Auto-cleared invalid sync item after 5 retries:`, item)
+            syncedIds.push(item.id)
           }
         } else {
           syncedCount++
+          syncedIds.push(item.id)
         }
       } catch (ex: any) {
         errors.push(`Exception syncing ${item.type}: ${ex.message}`)
         const retries = (item.retries || 0) + 1
-        if (retries < 3) {
-          remainingQueue.push({ ...item, retries })
+        if (retries < 5) {
+          await this.incrementRetries(item.id)
+        } else {
+          syncedIds.push(item.id) // give up
         }
       }
     }
 
-    this.saveQueue(remainingQueue)
+    // Remove successfully synced items from queue
+    await this.removeFromQueue(syncedIds)
+    
     this.isSyncing = false
     this.notify()
 
-    return {
-      success: errors.length === 0,
-      syncedCount,
-      errors
-    }
+    return { success: errors.length === 0, syncedCount, errors }
   }
 
   // Full manual synchronization & remote refresh
@@ -362,11 +426,9 @@ class SyncManager {
     let syncedCount = 0
 
     try {
-      // 1. FIRST: Upload any pending offline transactions
       const queueResult = await this.syncPendingData(true)
       syncedCount = queueResult.syncedCount
 
-      // 2. Fetch latest products gracefully
       try {
         const { data: prodData } = await supabase.from('products').select('*').order('name', { ascending: true })
         if (prodData && prodData.length > 0) {
@@ -387,7 +449,6 @@ class SyncManager {
         console.warn('Products background sync note:', pErr)
       }
 
-      // 3. Fetch latest settings gracefully
       try {
         const { data: setData } = await supabase.from('settings').select('*').limit(1)
         if (setData && setData.length > 0) {
@@ -410,15 +471,14 @@ class SyncManager {
       let message = 'All data synchronized and connected to cloud!'
       if (syncedCount > 0) {
         message = `Successfully uploaded ${syncedCount} offline transaction(s) to cloud database!`
-      } else if (this.getQueue().length === 0) {
-        message = 'All transactions and records are already up to date in cloud!'
+      } else {
+        const pendingCount = await this.getPendingCount()
+        if (pendingCount === 0) {
+          message = 'All transactions and records are already up to date in cloud!'
+        }
       }
 
-      return {
-        success: true,
-        message,
-        syncedCount
-      }
+      return { success: true, message, syncedCount }
     } catch (e: any) {
       console.warn('Sync error:', e)
       this.isSyncing = false
@@ -433,4 +493,3 @@ class SyncManager {
 }
 
 export const syncManager = new SyncManager()
-

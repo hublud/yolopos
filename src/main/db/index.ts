@@ -24,9 +24,18 @@ sqlite.pragma('journal_mode = WAL');
 
 export const db = drizzle(sqlite, { schema });
 
+/** Safe ALTER TABLE — ignores the error if column already exists */
+function safeAddColumn(table: string, column: string, definition: string) {
+  try {
+    sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition};`);
+  } catch {
+    // Column already exists — ignore
+  }
+}
+
 // Very basic automatic migration/initialization for the desktop POS
 export function initDB() {
-  // Ensure settings table exists (unconditionally, so existing databases get upgraded seamlessly)
+  // Ensure settings table exists
   sqlite.exec(`
     CREATE TABLE IF NOT EXISTS settings (
       id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -52,7 +61,6 @@ export function initDB() {
   if (!tableCheck) {
     console.log('Initializing database schema...');
     
-    // Create tables manually to avoid relying on complex migration pipelines in ASAR
     sqlite.exec(`
       CREATE TABLE IF NOT EXISTS cashiers (
         id TEXT PRIMARY KEY,
@@ -68,6 +76,7 @@ export function initDB() {
         category TEXT NOT NULL,
         image TEXT NOT NULL,
         stock INTEGER NOT NULL DEFAULT 0,
+        variants TEXT NOT NULL DEFAULT '[]',
         created_at INTEGER NOT NULL
       );
       
@@ -85,9 +94,11 @@ export function initDB() {
         discount REAL NOT NULL DEFAULT 0,
         tax REAL NOT NULL DEFAULT 0,
         status TEXT NOT NULL DEFAULT 'completed',
+        payment_method TEXT NOT NULL DEFAULT 'cash',
         cashier_id TEXT,
         customer_id TEXT,
         created_at INTEGER NOT NULL,
+        synced INTEGER NOT NULL DEFAULT 0,
         FOREIGN KEY (cashier_id) REFERENCES cashiers(id),
         FOREIGN KEY (customer_id) REFERENCES customers(id)
       );
@@ -96,10 +107,10 @@ export function initDB() {
         id TEXT PRIMARY KEY,
         order_id TEXT NOT NULL,
         product_id TEXT NOT NULL,
+        variant_name TEXT,
         quantity INTEGER NOT NULL,
         price REAL NOT NULL,
-        FOREIGN KEY (order_id) REFERENCES orders(id),
-        FOREIGN KEY (product_id) REFERENCES products(id)
+        FOREIGN KEY (order_id) REFERENCES orders(id)
       );
       
       CREATE TABLE IF NOT EXISTS inventory_logs (
@@ -113,50 +124,36 @@ export function initDB() {
     `);
 
     // Seed default cashiers
-    const insertCashier = sqlite.prepare('INSERT INTO cashiers (id, name, pin, role) VALUES (?, ?, ?, ?)');
-    insertCashier.run(randomUUID(), 'Admin', '1234', 'admin');
-    insertCashier.run(randomUUID(), 'Staff', '5555', 'cashier');
+    const insertCashier = sqlite.prepare('INSERT OR IGNORE INTO cashiers (id, name, pin, role) VALUES (?, ?, ?, ?)');
+    insertCashier.run('cashier-admin', 'Admin', '1282', 'admin');
+    insertCashier.run('cashier-staff', 'Staff', '5555', 'cashier');
     
-    // Seed default products for YOLO BITE
-    const insertProduct = sqlite.prepare('INSERT INTO products (id, name, price, category, image, stock, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
-    const now = Date.now();
-    
-    // Mocktails
-    insertProduct.run(randomUUID(), 'Kiwi Breeze', 100, 'Mocktails', 'drink.png', 50, now);
-    insertProduct.run(randomUUID(), 'Swimming pool', 100, 'Mocktails', 'drink.png', 50, now);
-    insertProduct.run(randomUUID(), 'Chapman', 100, 'Mocktails', 'drink.png', 50, now);
-    insertProduct.run(randomUUID(), 'Virgin Mojito', 100, 'Mocktails', 'drink.png', 50, now);
-    insertProduct.run(randomUUID(), 'Safe sex on the beach', 100, 'Mocktails', 'drink.png', 50, now);
-    insertProduct.run(randomUUID(), 'Virgin Colada', 100, 'Mocktails', 'drink.png', 50, now);
-
-    // Cocktails
-    insertProduct.run(randomUUID(), 'Sex on the beach', 100, 'Cocktails', 'drink.png', 50, now);
-    insertProduct.run(randomUUID(), 'Cosmopolitan', 100, 'Cocktails', 'drink.png', 50, now);
-    insertProduct.run(randomUUID(), 'Long island', 100, 'Cocktails', 'drink.png', 50, now);
-    insertProduct.run(randomUUID(), 'Adiós moderfucka', 100, 'Cocktails', 'drink.png', 50, now);
-    insertProduct.run(randomUUID(), 'Blue Lagoon', 100, 'Cocktails', 'drink.png', 50, now);
-    insertProduct.run(randomUUID(), 'Tequila sunrise', 100, 'Cocktails', 'drink.png', 50, now);
-
-    // Smoothies
-    insertProduct.run(randomUUID(), 'Sunburst', 100, 'Smoothies', 'drink.png', 50, now);
-    insertProduct.run(randomUUID(), 'Nutty Banana', 100, 'Smoothies', 'drink.png', 50, now);
-    insertProduct.run(randomUUID(), 'Heart beet', 100, 'Smoothies', 'drink.png', 50, now);
-    insertProduct.run(randomUUID(), 'Strawberry cloud', 100, 'Smoothies', 'drink.png', 50, now);
-    insertProduct.run(randomUUID(), 'Mixed fruit', 100, 'Smoothies', 'drink.png', 50, now);
-
-    // Milkshakes
-    insertProduct.run(randomUUID(), 'Oreos shake', 100, 'Milkshakes', 'drink.png', 50, now);
-    insertProduct.run(randomUUID(), 'Strawberry shake', 100, 'Milkshakes', 'drink.png', 50, now);
-    insertProduct.run(randomUUID(), 'Vanilla shake', 100, 'Milkshakes', 'drink.png', 50, now);
-    insertProduct.run(randomUUID(), 'Chocolate shake', 100, 'Milkshakes', 'drink.png', 50, now);
-    insertProduct.run(randomUUID(), 'Banana  shake', 100, 'Milkshakes', 'drink.png', 50, now);
-
-    // Juices
-    insertProduct.run(randomUUID(), 'Citrus glow', 100, 'Juices', 'drink.png', 50, now);
-    insertProduct.run(randomUUID(), 'Fresh pineapple juice', 100, 'Juices', 'drink.png', 50, now);
-    insertProduct.run(randomUUID(), 'Tropical sunrise(pineapple, orange, watermelon)', 100, 'Juices', 'drink.png', 50, now);
-    insertProduct.run(randomUUID(), 'Ginger Zing', 100, 'Juices', 'drink.png', 50, now);
-    
-    console.log('Database initialized successfully with seeded data.');
+    console.log('Database schema initialized.');
   }
+
+  // ── Migrations for existing databases ──────────────────────────────────────
+  // These run safely on every startup and do nothing if columns already exist.
+
+  safeAddColumn('orders', 'payment_method', "TEXT NOT NULL DEFAULT 'cash'");
+  safeAddColumn('orders', 'synced', "INTEGER NOT NULL DEFAULT 0");
+  safeAddColumn('products', 'variants', "TEXT NOT NULL DEFAULT '[]'");
+  safeAddColumn('order_items', 'variant_name', "TEXT");
+
+  // Create durable offline queue table (cloud-first fallback)
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS offline_queue (
+      id TEXT PRIMARY KEY,
+      type TEXT NOT NULL,
+      payload TEXT NOT NULL,
+      timestamp INTEGER NOT NULL,
+      retries INTEGER NOT NULL DEFAULT 0
+    );
+  `);
+
+  // Ensure cashier seeds exist (for upgraded DBs that only had random UUIDs)
+  const insertCashierIgnore = sqlite.prepare('INSERT OR IGNORE INTO cashiers (id, name, pin, role) VALUES (?, ?, ?, ?)');
+  insertCashierIgnore.run('cashier-admin', 'Admin', '1282', 'admin');
+  insertCashierIgnore.run('cashier-staff', 'Staff', '5555', 'cashier');
+
+  console.log('DB ready:', dbPath);
 }

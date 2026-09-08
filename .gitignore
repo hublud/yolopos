@@ -9,4 +9,7 @@ win-unpacked
 .eslintcache
 *.log*
 *.db*
+*.mkv
+*.mp4
+*.avi
 

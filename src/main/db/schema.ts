@@ -15,6 +15,7 @@ export const products = sqliteTable('products', {
   category: text('category').notNull(),
   image: text('image').notNull(),
   stock: integer('stock').notNull().default(0),
+  variants: text('variants', { mode: 'json' }),
   createdAt: integer('created_at').notNull(),
 });
 
@@ -31,6 +32,7 @@ export const orders = sqliteTable('orders', {
   total: real('total').notNull(),
   discount: real('discount').notNull().default(0),
   tax: real('tax').notNull().default(0),
+  paymentMethod: text('payment_method').notNull().default('cash'),
   status: text('status').notNull().default('completed'),
   cashierId: text('cashier_id').references(() => cashiers.id),
   customerId: text('customer_id').references(() => customers.id),
@@ -40,7 +42,8 @@ export const orders = sqliteTable('orders', {
 export const orderItems = sqliteTable('order_items', {
   id: text('id').primaryKey(),
   orderId: text('order_id').notNull().references(() => orders.id),
-  productId: text('product_id').notNull().references(() => products.id),
+  productId: text('product_id').notNull(), // No FK — product IDs may come from Supabase
+  variantName: text('variant_name'),
   quantity: integer('quantity').notNull(),
   price: real('price').notNull(),
 });
@@ -51,6 +54,14 @@ export const inventoryLogs = sqliteTable('inventory_logs', {
   change: integer('change').notNull(),
   reason: text('reason').notNull(), // 'sale', 'restock', 'spoilage'
   createdAt: integer('created_at').notNull(),
+});
+
+export const offlineQueue = sqliteTable('offline_queue', {
+  id: text('id').primaryKey(),
+  type: text('type').notNull(),    // 'CREATE_ORDER' | 'UPDATE_STOCK' | etc.
+  payload: text('payload').notNull(), // JSON-stringified
+  timestamp: integer('timestamp').notNull(),
+  retries: integer('retries').notNull().default(0),
 });
 
 // Relations
@@ -84,4 +95,3 @@ export const settings = sqliteTable('settings', {
   receiptAddress: text('receipt_address').notNull(),
   phones: text('phones').notNull(),
 });
-

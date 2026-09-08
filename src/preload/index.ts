@@ -19,6 +19,13 @@ const api = {
   createOrder: (payload: any) => ipcRenderer.invoke('db:orders:create', payload),
   getOrders: () => ipcRenderer.invoke('db:orders:list'),
   
+  // Offline Queue — durable SQLite-backed sync queue (replaces localStorage queue)
+  pushToQueue: (item: { id: string, type: string, payload: any, timestamp: number }) =>
+    ipcRenderer.invoke('db:queue:push', item),
+  getPendingQueue: () => ipcRenderer.invoke('db:queue:get-pending'),
+  removeFromQueue: (ids: string[]) => ipcRenderer.invoke('db:queue:remove', ids),
+  incrementQueueRetries: (id: string) => ipcRenderer.invoke('db:queue:increment-retries', id),
+
   // Customers
   getCustomers: () => ipcRenderer.invoke('db:customers:list'),
   addCustomer: (data: any) => ipcRenderer.invoke('db:customers:add', data),

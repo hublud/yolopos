@@ -561,7 +561,7 @@ export const supabaseApi = {
 
       let { error: oErr } = await supabase.from('orders').insert(orderInsertData)
       if (oErr) {
-        console.warn('First order insert attempt error, retrying with minimal fields:', oErr)
+        console.warn('First order insert attempt error, retrying without cashier_id:', oErr)
         const { error: retryErr } = await supabase.from('orders').insert({
           ...orderInsertData,
           cashier_id: null
@@ -570,24 +570,23 @@ export const supabaseApi = {
       }
 
       if (!oErr) {
-        const orderItems = payload.items.map((it, idx) => ({
+        const orderItemsToInsert = payload.items.map((it, idx) => ({
           id: `${orderId}-item-${idx}`,
           order_id: orderId,
-          product_id: String(it.productId || 'sc-1'),
+          product_id: String(it.productId), // Use actual product ID — no silent fallback
           variant_name: it.variantName || null,
+          name: it.name || '',
           quantity: Number(it.quantity || 1),
           price: Number(it.price || 0)
         }))
         
         try {
-          const { error: itErr } = await supabase.from('order_items').insert(orderItems)
+          const { error: itErr } = await supabase.from('order_items').insert(orderItemsToInsert)
           if (itErr) {
-            console.warn('Order items insert retry with fallback:', itErr)
-            const fallbackItems = orderItems.map(it => ({ ...it, product_id: 'sc-1' }))
-            await supabase.from('order_items').insert(fallbackItems)
+            console.warn('Order items insert error:', itErr)
           }
         } catch (itEx) {
-          console.warn('Order items exception note:', itEx)
+          console.warn('Order items exception:', itEx)
         }
 
         // Deduct stock in Supabase
