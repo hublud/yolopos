@@ -17,11 +17,14 @@ import {
   Eye,
   EyeOff,
   ShieldAlert,
-  CheckCircle2
+  CheckCircle2,
+  FileDown,
+  FileText
 } from 'lucide-react'
 import logoSrc from '../assets/logo.jpeg'
 import { syncManager } from '../services/syncManager'
 import { api } from '../api'
+import { generatePdfReport } from '../utils/pdfReportGenerator'
 
 interface OrderItem {
   productId: string
@@ -138,6 +141,87 @@ export function Dashboard() {
     setAdminPassword('')
     setPasswordError('')
     setShowPassword(false)
+  }
+
+  // PDF Report Modal State
+  const [showReportModal, setShowReportModal] = useState(false)
+  const [reportType, setReportType] = useState<'today' | 'monthly' | 'yearly' | 'custom' | 'all'>('today')
+  const [reportMonth, setReportMonth] = useState<string>(getMonthString()) // YYYY-MM
+  const [reportYear, setReportYear] = useState<string>(new Date().getFullYear().toString())
+  const [reportStartDate, setReportStartDate] = useState<string>(getTodayString())
+  const [reportEndDate, setReportEndDate] = useState<string>(getTodayString())
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false)
+
+  // Filter orders for PDF generation
+  const getReportOrders = () => {
+    return allOrders.filter(order => {
+      if (!order) return false
+      const rawTime = order.createdAt
+      const timeMs = typeof rawTime === 'number' ? rawTime : Number(rawTime) || Date.now()
+      const orderDateStr = getLocalDateString(timeMs) // YYYY-MM-DD
+      const orderMonthStr = orderDateStr.substring(0, 7) // YYYY-MM
+      const orderYearStr = orderDateStr.substring(0, 4) // YYYY
+
+      if (reportType === 'today') {
+        const isWithinLast24Hours = (Date.now() - timeMs) >= 0 && (Date.now() - timeMs) <= (24 * 60 * 60 * 1000)
+        return orderDateStr === getTodayString() || isWithinLast24Hours
+      } else if (reportType === 'monthly') {
+        return orderMonthStr === reportMonth
+      } else if (reportType === 'yearly') {
+        return orderYearStr === reportYear
+      } else if (reportType === 'custom') {
+        return orderDateStr >= reportStartDate && orderDateStr <= reportEndDate
+      } else if (reportType === 'all') {
+        return true
+      }
+      return true
+    })
+  }
+
+  const handleDownloadPdf = () => {
+    setIsGeneratingPdf(true)
+    try {
+      const reportOrders = getReportOrders()
+
+      let periodLabel = 'Today'
+      let dateRangeText = formatDate(Date.now())
+
+      if (reportType === 'today') {
+        periodLabel = 'Today'
+        dateRangeText = formatDate(Date.now())
+      } else if (reportType === 'monthly') {
+        const [y, m] = reportMonth.split('-')
+        const monthDate = new Date(Number(y), Number(m) - 1, 1)
+        periodLabel = 'Monthly Report'
+        dateRangeText = monthDate.toLocaleDateString(undefined, { year: 'numeric', month: 'long' })
+      } else if (reportType === 'yearly') {
+        periodLabel = 'Annual Report'
+        dateRangeText = `Year ${reportYear}`
+      } else if (reportType === 'custom') {
+        periodLabel = 'Custom Range'
+        dateRangeText = `${reportStartDate} to ${reportEndDate}`
+      } else if (reportType === 'all') {
+        periodLabel = 'All Historical Records'
+        dateRangeText = 'Complete Database History'
+      }
+
+      generatePdfReport({
+        periodLabel,
+        dateRangeText,
+        orders: reportOrders,
+        settings,
+        generatedBy: 'Admin'
+      })
+
+      setDeleteSuccessToast(`PDF report for "${periodLabel}" generated and downloaded!`)
+      setTimeout(() => setDeleteSuccessToast(''), 4000)
+      setShowReportModal(false)
+    } catch (e) {
+      console.error('Failed to generate PDF report:', e)
+      alert('Failed to generate PDF report. Please try again.')
+    } finally {
+      setIsGeneratingPdf(false)
+    }
   }
 
   useEffect(() => {
@@ -351,8 +435,17 @@ export function Dashboard() {
           <p className="text-sm text-gray-500 mt-1">Monitor sales metrics, transaction histories, and beverage popularity.</p>
         </div>
 
-        {/* Date Filter Controls & Refresh */}
+        {/* Date Filter Controls, PDF Export & Refresh */}
         <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => setShowReportModal(true)}
+            className="bg-yolo-red hover:bg-red-700 text-white shadow-sm shadow-red-200 px-3.5 py-2 rounded-2xl active:scale-95 transition-all flex items-center gap-1.5 text-xs font-bold"
+            title="Download Official Sales Report in PDF"
+          >
+            <FileDown size={14} />
+            <span>Download PDF Report</span>
+          </button>
+
           <button
             onClick={handleManualRefresh}
             disabled={isRefreshing}
@@ -898,6 +991,164 @@ export function Dashboard() {
                 </button>
               </div>
             </form>
+
+          </div>
+        </div>
+      )}
+
+      {/* Download PDF Report Modal */}
+      {showReportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-3xl p-6 sm:p-7 max-w-lg w-full shadow-2xl border border-gray-100 flex flex-col relative animate-scaleUp">
+            
+            {/* Close modal button */}
+            <button
+              onClick={() => setShowReportModal(false)}
+              disabled={isGeneratingPdf}
+              className="absolute top-5 right-5 p-1.5 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all"
+            >
+              <X size={18} />
+            </button>
+
+            {/* Header Icon */}
+            <div className="w-14 h-14 rounded-2xl bg-red-50 text-yolo-red border border-red-100 flex items-center justify-center mb-3 mx-auto shadow-inner">
+              <FileText size={28} />
+            </div>
+
+            {/* Title & Subtitle */}
+            <div className="text-center mb-5">
+              <h3 className="text-lg font-bold text-yolo-dark">Export Sales Report to PDF</h3>
+              <p className="text-xs text-gray-500 mt-1">
+                Choose a time period to generate an executive report with metrics and full transactions.
+              </p>
+            </div>
+
+            {/* Scope Selection Tabs */}
+            <div className="bg-gray-100 p-1 rounded-2xl flex flex-wrap gap-1 mb-4">
+              {[
+                { id: 'today', label: 'Today' },
+                { id: 'monthly', label: 'Monthly' },
+                { id: 'yearly', label: 'Yearly' },
+                { id: 'custom', label: 'Custom Date' },
+                { id: 'all', label: 'All Time' }
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setReportType(tab.id as any)}
+                  className={`flex-1 py-2 px-2 text-xs font-bold rounded-xl transition-all ${
+                    reportType === tab.id
+                      ? 'bg-white text-yolo-dark shadow-sm'
+                      : 'text-gray-500 hover:text-yolo-dark'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Conditional Scope Selectors */}
+            {reportType === 'monthly' && (
+              <div className="bg-gray-50 p-3.5 rounded-2xl border border-gray-100 mb-4 flex items-center justify-between">
+                <span className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
+                  <Calendar size={14} className="text-gray-400" /> Select Month:
+                </span>
+                <input
+                  type="month"
+                  value={reportMonth}
+                  onChange={(e) => setReportMonth(e.target.value)}
+                  className="text-xs font-bold bg-white px-3 py-1.5 rounded-xl border border-gray-200 text-gray-800 outline-none focus:border-yolo-red cursor-pointer"
+                />
+              </div>
+            )}
+
+            {reportType === 'yearly' && (
+              <div className="bg-gray-50 p-3.5 rounded-2xl border border-gray-100 mb-4 flex items-center justify-between">
+                <span className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
+                  <Calendar size={14} className="text-gray-400" /> Select Year:
+                </span>
+                <select
+                  value={reportYear}
+                  onChange={(e) => setReportYear(e.target.value)}
+                  className="text-xs font-bold bg-white px-3 py-1.5 rounded-xl border border-gray-200 text-gray-800 outline-none focus:border-yolo-red cursor-pointer"
+                >
+                  {[2026, 2025, 2024, 2023].map(yr => (
+                    <option key={yr} value={yr.toString()}>{yr}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {reportType === 'custom' && (
+              <div className="bg-gray-50 p-3.5 rounded-2xl border border-gray-100 mb-4 flex flex-col sm:flex-row gap-3 items-center justify-between">
+                <div className="w-full flex-1">
+                  <label className="text-[10px] font-bold text-gray-400 block mb-1">From Date</label>
+                  <input
+                    type="date"
+                    value={reportStartDate}
+                    onChange={(e) => setReportStartDate(e.target.value)}
+                    className="w-full text-xs font-semibold bg-white px-2.5 py-1.5 rounded-xl border border-gray-200 text-gray-800 outline-none focus:border-yolo-red cursor-pointer"
+                  />
+                </div>
+                <div className="w-full flex-1">
+                  <label className="text-[10px] font-bold text-gray-400 block mb-1">To Date</label>
+                  <input
+                    type="date"
+                    value={reportEndDate}
+                    onChange={(e) => setReportEndDate(e.target.value)}
+                    className="w-full text-xs font-semibold bg-white px-2.5 py-1.5 rounded-xl border border-gray-200 text-gray-800 outline-none focus:border-yolo-red cursor-pointer"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Dynamic Live Preview Card */}
+            {(() => {
+              const matchedOrders = getReportOrders()
+              const previewRevenue = matchedOrders.reduce((sum, o) => sum + (Number(o.total) || 0), 0)
+              return (
+                <div className="bg-red-50/50 rounded-2xl p-4 border border-red-100 mb-5 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-bold text-red-400 uppercase tracking-widest block">Summary Preview</span>
+                    <span className="text-base font-black text-yolo-dark block mt-0.5">{formatCurrency(previewRevenue)}</span>
+                    <span className="text-[11px] text-gray-500">{matchedOrders.length} transactions included</span>
+                  </div>
+                  <div className="px-3 py-1.5 rounded-xl bg-white border border-red-100 text-xs font-bold text-yolo-red shadow-sm uppercase">
+                    {reportType === 'today' ? 'Today' : reportType === 'monthly' ? reportMonth : reportType === 'yearly' ? reportYear : reportType === 'custom' ? 'Custom' : 'All Time'}
+                  </div>
+                </div>
+              )
+            })()}
+
+            {/* Modal Actions */}
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setShowReportModal(false)}
+                disabled={isGeneratingPdf}
+                className="flex-1 py-3 px-4 rounded-xl border border-gray-200 text-gray-600 font-bold text-xs hover:bg-gray-50 active:scale-95 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDownloadPdf}
+                disabled={isGeneratingPdf}
+                className="flex-1 py-3 px-4 rounded-xl bg-yolo-red hover:bg-red-700 text-white font-bold text-xs shadow-md shadow-red-200 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isGeneratingPdf ? (
+                  <>
+                    <RefreshCw size={14} className="animate-spin" />
+                    <span>Generating PDF...</span>
+                  </>
+                ) : (
+                  <>
+                    <FileDown size={14} />
+                    <span>Download PDF</span>
+                  </>
+                )}
+              </button>
+            </div>
 
           </div>
         </div>
