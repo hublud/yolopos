@@ -4,7 +4,6 @@ import { app } from 'electron';
 import path from 'path';
 import * as schema from './schema';
 import fs from 'fs';
-import { randomUUID } from 'crypto';
 
 const isDev = !app.isPackaged;
 const dbPath = isDev 

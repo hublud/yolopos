@@ -554,9 +554,11 @@ export const supabaseApi = {
         discount: Number(payload.discount || 0),
         tax: Number(payload.tax || 0),
         status: 'completed',
-        payment_method: payload.paymentMethod || 'cash',
         cashier_id: validCashierId,
         created_at: createdAt
+      }
+      if (payload.customerId) {
+        orderInsertData.customer_id = payload.customerId
       }
 
       let { error: oErr } = await supabase.from('orders').insert(orderInsertData)
@@ -575,7 +577,6 @@ export const supabaseApi = {
           order_id: orderId,
           product_id: String(it.productId), // Use actual product ID — no silent fallback
           variant_name: it.variantName || null,
-          name: it.name || '',
           quantity: Number(it.quantity || 1),
           price: Number(it.price || 0)
         }))
@@ -630,16 +631,18 @@ export const supabaseApi = {
 
   getOrders: async () => {
     try {
-      const ordersRes = await supabase.from('orders').select('*').order('created_at', { ascending: false }).limit(500)
-      const itemsRes = await supabase.from('order_items').select('*').limit(2000).catch(() => ({ data: [] }))
-      const cashiersRes = await supabase.from('cashiers').select('id, name').catch(() => ({ data: [] }))
-      const customersRes = await supabase.from('customers').select('id, name').catch(() => ({ data: [] }))
-      const productsRes = await supabase.from('products').select('id, name, category').catch(() => ({ data: [] }))
+      const [ordersRes, itemsRes, cashiersRes, customersRes, productsRes] = await Promise.all([
+        supabase.from('orders').select('*').order('created_at', { ascending: false }).limit(500),
+        supabase.from('order_items').select('*').limit(2000),
+        supabase.from('cashiers').select('id, name'),
+        supabase.from('customers').select('id, name'),
+        supabase.from('products').select('id, name, category')
+      ])
 
       if (ordersRes.data && Array.isArray(ordersRes.data)) {
-        const cashiersMap = new Map(((cashiersRes as any).data || []).map((c: any) => [c.id, c.name]))
-        const customersMap = new Map(((customersRes as any).data || []).map((c: any) => [c.id, c.name]))
-        const productsMap = new Map(((productsRes as any).data || []).map((p: any) => [p.id, p]))
+        const cashiersMap = new Map<string, string>(((cashiersRes as any).data || []).map((c: any) => [c.id, c.name]))
+        const customersMap = new Map<string, string>(((customersRes as any).data || []).map((c: any) => [c.id, c.name]))
+        const productsMap = new Map<string, any>(((productsRes as any).data || []).map((p: any) => [p.id, p]))
         
         const itemsByOrder: { [key: string]: any[] } = {}
         for (const it of ((itemsRes as any).data || [])) {
@@ -655,7 +658,7 @@ export const supabaseApi = {
           })
         }
 
-        const fullOrders = ordersRes.data.map((order: any) => {
+        const cloudOrders = ordersRes.data.map((order: any) => {
           const rawCreated = order.created_at || order.createdAt
           let timestamp = Date.now()
           if (typeof rawCreated === 'number') {
@@ -676,7 +679,7 @@ export const supabaseApi = {
             total: Number(order.total),
             discount: Number(order.discount || 0),
             tax: Number(order.tax || 0),
-            status: order.status,
+            status: order.status || 'completed',
             paymentMethod: order.payment_method || order.paymentMethod || 'cash',
             cashierId: order.cashier_id || order.cashierId,
             customerId: order.customer_id || order.customerId,
@@ -686,6 +689,13 @@ export const supabaseApi = {
             items: itemsByOrder[order.id] || []
           }
         })
+
+        // Merge with any local cached orders not yet on cloud
+        const localCached = syncManager.getCached<any[]>('orders', [])
+        const cloudIds = new Set(cloudOrders.map(o => o.id))
+        const pendingLocalOrders = localCached.filter(o => o && o.id && !cloudIds.has(o.id))
+
+        const fullOrders = [...pendingLocalOrders, ...cloudOrders].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
 
         syncManager.setOnline(true)
         syncManager.setCache('orders', fullOrders)

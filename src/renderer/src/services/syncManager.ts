@@ -144,14 +144,6 @@ class SyncManager {
     }
   }
 
-  private async saveQueue(queue: QueueItem[]) {
-    // In Electron, queue is managed item-by-item via IPC — no bulk save needed
-    if (!isElectron) {
-      localStorage.setItem('pos_offline_queue', JSON.stringify(queue))
-    }
-    this.notify()
-  }
-
   public async clearQueue(): Promise<void> {
     if (isElectron) {
       try {
@@ -277,7 +269,6 @@ class SyncManager {
               discount: Number(order.discount || 0),
               tax: Number(order.tax || 0),
               status: order.status || 'completed',
-              payment_method: order.paymentMethod || 'cash',
               created_at: Number(order.createdAt || Date.now())
             }
 
@@ -303,7 +294,6 @@ class SyncManager {
                 order_id: String(order.id),
                 product_id: String(it.productId),
                 variant_name: it.variantName || null,
-                name: it.name || '',
                 quantity: Number(it.quantity || 1),
                 price: Number(it.price || 0)
               }))

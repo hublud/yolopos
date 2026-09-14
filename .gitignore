@@ -12,4 +12,5 @@ win-unpacked
 *.mkv
 *.mp4
 *.avi
+electron.vite.config.*.mjs
 
