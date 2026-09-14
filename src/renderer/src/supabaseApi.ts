@@ -707,6 +707,29 @@ export const supabaseApi = {
     return syncManager.getCached<any[]>('orders', [])
   },
 
+  deleteOrder: async (orderId: string): Promise<ApiResult> => {
+    // 1. Remove from local cached orders immediately
+    const cachedOrders = syncManager.getCached<any[]>('orders', [])
+    const updatedOrders = cachedOrders.filter(o => o.id !== orderId && o.orderNumber !== orderId)
+    syncManager.setCache('orders', updatedOrders)
+
+    // 2. Delete from Supabase cloud
+    try {
+      await supabase.from('order_items').delete().eq('order_id', orderId)
+      const { error } = await supabase.from('orders').delete().eq('id', orderId)
+      if (error) {
+        console.warn('Supabase deleteOrder error:', error)
+      } else {
+        syncManager.setOnline(true)
+      }
+    } catch (e) {
+      console.warn('Network error deleting order from cloud:', e)
+    }
+
+    syncManager.notify()
+    return { success: true }
+  },
+
   // 4. CUSTOMERS
   getCustomers: async () => {
     try {

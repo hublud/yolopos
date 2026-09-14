@@ -278,6 +278,13 @@ export const mockApi = {
     return fullOrders.sort((a, b) => b.createdAt - a.createdAt);
   },
 
+  deleteOrder: async (orderId: string): Promise<{ success: boolean; error?: string }> => {
+    const orders = getStored<any[]>('yolo_orders', []);
+    const filtered = orders.filter(o => o.id !== orderId && o.orderNumber !== orderId);
+    setStored('yolo_orders', filtered);
+    return { success: true };
+  },
+
   getCustomers: async () => {
     return getStored('yolo_customers', DEFAULT_CUSTOMERS);
   },

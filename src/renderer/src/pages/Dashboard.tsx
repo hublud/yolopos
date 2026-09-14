@@ -11,7 +11,13 @@ import {
   Award,
   ArrowUpRight,
   ClipboardList,
-  RefreshCw
+  RefreshCw,
+  Trash2,
+  Lock,
+  Eye,
+  EyeOff,
+  ShieldAlert,
+  CheckCircle2
 } from 'lucide-react'
 import logoSrc from '../assets/logo.jpeg'
 import { syncManager } from '../services/syncManager'
@@ -69,6 +75,16 @@ export function Dashboard() {
   
   // Modal state
   const [activeOrder, setActiveOrder] = useState<Order | null>(null)
+
+  // Super Admin Order Deletion State
+  const [orderToDelete, setOrderToDelete] = useState<Order | null>(null)
+  const [adminPassword, setAdminPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [passwordError, setPasswordError] = useState('')
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteSuccessToast, setDeleteSuccessToast] = useState('')
+
+  const SUPER_ADMIN_PASSWORD = 'Del@123#'
   
   // Business settings fallback
   const [settings, setSettings] = useState(() => syncManager.getCached<any>('settings', {
@@ -76,6 +92,53 @@ export function Dashboard() {
     receiptAddress: 'SHOP G9, A.M STORE ALIYU MAKAMA ROAD,\nBARNAWA, KADUNA , KADUNA STATE,\nNIGERIA',
     phones: '07013974928, 07044030444'
   }))
+
+  const handleRequestDelete = (order: Order, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setOrderToDelete(order)
+    setAdminPassword('')
+    setPasswordError('')
+    setShowPassword(false)
+  }
+
+  const handleConfirmDelete = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
+    if (!orderToDelete) return
+
+    if (adminPassword !== SUPER_ADMIN_PASSWORD) {
+      setPasswordError('Incorrect Super Admin password. Please try again.')
+      return
+    }
+
+    setIsDeleting(true)
+    setPasswordError('')
+
+    try {
+      const res = await api.deleteOrder(orderToDelete.id)
+      if (res.success) {
+        setDeleteSuccessToast(`Order #${orderToDelete.orderNumber} deleted successfully.`)
+        setTimeout(() => setDeleteSuccessToast(''), 4000)
+        setOrderToDelete(null)
+        setAdminPassword('')
+        setShowPassword(false)
+        await loadData(false)
+      } else {
+        setPasswordError(res.error || 'Failed to delete order.')
+      }
+    } catch (err: any) {
+      setPasswordError(err.message || 'Error occurred while deleting order.')
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  const handleCloseDeleteModal = () => {
+    if (isDeleting) return
+    setOrderToDelete(null)
+    setAdminPassword('')
+    setPasswordError('')
+    setShowPassword(false)
+  }
 
   useEffect(() => {
     loadData()
@@ -459,9 +522,9 @@ export function Dashboard() {
                 <div className="grid grid-cols-12 border-b border-gray-100 pb-2 text-xs font-bold text-gray-400 uppercase tracking-wider">
                   <div className="col-span-3">Order Number</div>
                   <div className="col-span-3">Date / Time</div>
-                  <div className="col-span-3">Cashier</div>
+                  <div className="col-span-2">Cashier</div>
                   <div className="col-span-2 text-right">Total</div>
-                  <div className="col-span-1 text-center"></div>
+                  <div className="col-span-2 text-right pr-2">Actions</div>
                 </div>
 
                 <div className="divide-y divide-gray-50">
@@ -479,16 +542,29 @@ export function Dashboard() {
                         <span className="font-medium text-gray-700 block">{formatDate(order.createdAt)}</span>
                         <span className="text-[10px] text-gray-400 block mt-0.5">{formatTime(order.createdAt)}</span>
                       </div>
-                      <div className="col-span-3 font-medium text-gray-700">
+                      <div className="col-span-2 font-medium text-gray-700">
                         {order.cashierName || 'Staff'}
                       </div>
                       <div className="col-span-2 text-right font-bold text-yolo-dark">
                         {formatCurrency(order.total)}
                       </div>
-                      <div className="col-span-1 text-center">
-                        <span className="p-1.5 inline-block group-hover:bg-red-100/70 text-gray-400 group-hover:text-yolo-red rounded-lg transition-all">
+                      <div className="col-span-2 flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={() => setActiveOrder(order)}
+                          title="View Receipt"
+                          className="p-1.5 hover:bg-red-100/80 text-gray-400 hover:text-yolo-red rounded-lg transition-all"
+                        >
                           <Receipt size={14} />
-                        </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => handleRequestDelete(order, e)}
+                          title="Delete Order (Super Admin Required)"
+                          className="p-1.5 hover:bg-red-100 text-gray-400 hover:text-red-600 rounded-lg transition-all"
+                        >
+                          <Trash2 size={14} />
+                        </button>
                       </div>
                     </div>
                   ))}
@@ -704,6 +780,134 @@ export function Dashboard() {
             </div>
 
           </div>
+        </div>
+      )}
+
+      {/* Super Admin Order Deletion Modal */}
+      {orderToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-3xl p-6 sm:p-7 max-w-md w-full shadow-2xl border border-gray-100 flex flex-col relative animate-scaleUp">
+            
+            {/* Close modal X button */}
+            <button
+              onClick={handleCloseDeleteModal}
+              disabled={isDeleting}
+              className="absolute top-5 right-5 p-1.5 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all"
+            >
+              <X size={18} />
+            </button>
+
+            {/* Header Icon */}
+            <div className="w-14 h-14 rounded-2xl bg-red-50 text-red-600 border border-red-100 flex items-center justify-center mb-4 mx-auto shadow-inner">
+              <ShieldAlert size={28} />
+            </div>
+
+            {/* Title & Subtitle */}
+            <div className="text-center mb-5">
+              <h3 className="text-lg font-bold text-yolo-dark">Authorize Order Deletion</h3>
+              <p className="text-xs text-gray-500 mt-1">
+                Super Admin authentication is required to permanently delete order records.
+              </p>
+            </div>
+
+            {/* Target Order Summary Card */}
+            <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100 mb-5 flex flex-col gap-2 text-xs">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400 font-medium">Order Number:</span>
+                <span className="font-bold text-yolo-dark">#{orderToDelete.orderNumber}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400 font-medium">Order Date:</span>
+                <span className="font-semibold text-gray-700">{formatDate(orderToDelete.createdAt)} {formatTime(orderToDelete.createdAt)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400 font-medium">Total Amount:</span>
+                <span className="font-black text-yolo-red text-sm">{formatCurrency(orderToDelete.total)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400 font-medium">Cashier / Staff:</span>
+                <span className="font-semibold text-gray-700">{orderToDelete.cashierName || 'Staff'}</span>
+              </div>
+            </div>
+
+            {/* Password Form */}
+            <form onSubmit={handleConfirmDelete} className="flex flex-col gap-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">
+                  Super Admin Password
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
+                    <Lock size={16} />
+                  </div>
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={adminPassword}
+                    onChange={(e) => {
+                      setAdminPassword(e.target.value)
+                      setPasswordError('')
+                    }}
+                    placeholder="Enter password to confirm"
+                    autoFocus
+                    className={`w-full pl-10 pr-10 py-3 rounded-xl bg-gray-50 border text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:bg-white transition-all ${
+                      passwordError ? 'border-red-500 ring-2 ring-red-100' : 'border-gray-200 focus:border-yolo-red focus:ring-2 focus:ring-red-100'
+                    }`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+                {passwordError && (
+                  <p className="text-xs text-red-600 font-medium mt-1.5 flex items-center gap-1 animate-shake">
+                    <AlertTriangle size={13} />
+                    {passwordError}
+                  </p>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={handleCloseDeleteModal}
+                  disabled={isDeleting}
+                  className="flex-1 py-3 px-4 rounded-xl border border-gray-200 text-gray-600 font-bold text-xs hover:bg-gray-50 active:scale-95 transition-all disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!adminPassword || isDeleting}
+                  className="flex-1 py-3 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-md shadow-red-200 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isDeleting ? (
+                    <>
+                      <RefreshCw size={14} className="animate-spin" />
+                      <span>Deleting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 size={14} />
+                      <span>Delete Order</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+
+          </div>
+        </div>
+      )}
+
+      {/* Floating Success Toast */}
+      {deleteSuccessToast && (
+        <div className="fixed bottom-6 right-6 z-50 bg-yolo-dark text-white px-5 py-3.5 rounded-2xl shadow-xl border border-gray-700 flex items-center gap-2.5 text-xs font-semibold animate-slideUp">
+          <CheckCircle2 size={16} className="text-green-400" />
+          <span>{deleteSuccessToast}</span>
         </div>
       )}
 
