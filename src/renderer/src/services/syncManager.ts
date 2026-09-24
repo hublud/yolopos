@@ -104,18 +104,11 @@ class SyncManager {
 
       const { data, error } = await supabase.from('products').select('id').limit(1)
       const isReachable = !error && data !== null
-      if (isReachable) {
-        this.setOnline(true)
-        return true
-      }
-      
-      const online = typeof navigator !== 'undefined' ? navigator.onLine : true
-      this.setOnline(online)
-      return online
+      this.setOnline(isReachable)
+      return isReachable
     } catch {
-      const online = typeof navigator !== 'undefined' ? navigator.onLine : true
-      this.setOnline(online)
-      return online
+      this.setOnline(false)
+      return false
     }
   }
 
@@ -269,6 +262,7 @@ class SyncManager {
               discount: Number(order.discount || 0),
               tax: Number(order.tax || 0),
               status: order.status || 'completed',
+              payment_method: order.paymentMethod || order.payment_method || 'cash',
               created_at: Number(order.createdAt || Date.now())
             }
 
@@ -416,9 +410,21 @@ class SyncManager {
     let syncedCount = 0
 
     try {
+      const isReachable = await this.forceCheck()
+      if (!isReachable) {
+        this.isSyncing = false
+        this.notify()
+        return {
+          success: false,
+          message: 'Cloud database is currently unreachable. Check your internet connection or Supabase project status.',
+          syncedCount: 0
+        }
+      }
+
       const queueResult = await this.syncPendingData(true)
       syncedCount = queueResult.syncedCount
 
+      // Refresh Products
       try {
         const { data: prodData } = await supabase.from('products').select('*').order('name', { ascending: true })
         if (prodData && prodData.length > 0) {
@@ -433,12 +439,12 @@ class SyncManager {
             variants: p.variants || []
           }))
           this.setCache('products', formatted)
-          this.setOnline(true)
         }
       } catch (pErr) {
         console.warn('Products background sync note:', pErr)
       }
 
+      // Refresh Settings
       try {
         const { data: setData } = await supabase.from('settings').select('*').limit(1)
         if (setData && setData.length > 0) {
@@ -449,22 +455,30 @@ class SyncManager {
             receiptAddress: s.receipt_address || '',
             phones: s.phones || ''
           })
-          this.setOnline(true)
         }
       } catch (sErr) {
         console.warn('Settings background sync note:', sErr)
       }
 
+      // Refresh Orders if available
+      try {
+        if ((window as any).api?.getOrders) {
+          await (window as any).api.getOrders()
+        }
+      } catch (oErr) {
+        console.warn('Orders background sync note:', oErr)
+      }
+
       this.isSyncing = false
       this.notify()
 
-      let message = 'All data synchronized and connected to cloud!'
+      let message = 'All data synchronized with cloud database!'
       if (syncedCount > 0) {
         message = `Successfully uploaded ${syncedCount} offline transaction(s) to cloud database!`
       } else {
         const pendingCount = await this.getPendingCount()
         if (pendingCount === 0) {
-          message = 'All transactions and records are already up to date in cloud!'
+          message = 'All transactions and records are up to date across all devices!'
         }
       }
 
@@ -472,10 +486,11 @@ class SyncManager {
     } catch (e: any) {
       console.warn('Sync error:', e)
       this.isSyncing = false
+      this.setOnline(false)
       this.notify()
       return {
-        success: true,
-        message: syncedCount > 0 ? `Uploaded ${syncedCount} record(s) to cloud.` : 'Transactions verified in cloud database.',
+        success: false,
+        message: 'Sync failed: ' + (e.message || 'Unable to connect to Supabase cloud database.'),
         syncedCount
       }
     }

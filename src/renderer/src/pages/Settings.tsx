@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Printer, Database, Store, Save, RefreshCw, Users, Key, Plus, X, Shield, Eye, EyeOff } from 'lucide-react'
+import { Printer, Database, Store, Save, RefreshCw, Users, Key, Plus, X, Shield, Eye, EyeOff, Cloud, CheckCircle2, AlertTriangle, Globe } from 'lucide-react'
 import { api } from '../api'
+import { getSupabaseConfig, reconfigureSupabase } from '../supabaseClient'
+import { syncManager } from '../services/syncManager'
 
 interface SettingsProps {
   settings: {
@@ -21,6 +23,13 @@ export function Settings({ settings, onSettingsSaved }: SettingsProps) {
   const [saving, setSaving] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Cloud Supabase Connection States
+  const [supabaseUrl, setSupabaseUrl] = useState('')
+  const [supabaseAnonKey, setSupabaseAnonKey] = useState('')
+  const [isCloudTesting, setIsCloudTesting] = useState(false)
+  const [cloudStatus, setCloudStatus] = useState<{ isConnected: boolean; message: string } | null>(null)
+  const [cloudSaveSuccess, setCloudSaveSuccess] = useState(false)
 
   // Staff Management States
   const [cashiersList, setCashiersList] = useState<any[]>([])
@@ -44,8 +53,45 @@ export function Settings({ settings, onSettingsSaved }: SettingsProps) {
       setReceiptAddress(settings.receiptAddress || '')
       setPhones(settings.phones || '')
     }
+    const currentConfig = getSupabaseConfig()
+    setSupabaseUrl(currentConfig.url)
+    setSupabaseAnonKey(currentConfig.key)
+
     loadCashiers()
+    testCloudConnection()
   }, [settings])
+
+  const testCloudConnection = async () => {
+    setIsCloudTesting(true)
+    try {
+      const isReachable = await syncManager.forceCheck()
+      if (isReachable) {
+        setCloudStatus({ isConnected: true, message: 'Connected! Real-time Multi-PC sync is active.' })
+      } else {
+        setCloudStatus({ 
+          isConnected: false, 
+          message: 'Cannot reach Supabase cloud database. Project may be paused or URL/Key needs updating.' 
+        })
+      }
+    } catch (e: any) {
+      setCloudStatus({ isConnected: false, message: 'Connection test failed: ' + (e.message || 'Network error') })
+    } finally {
+      setIsCloudTesting(false)
+    }
+  }
+
+  const handleSaveSupabaseConfig = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!supabaseUrl.trim() || !supabaseAnonKey.trim()) {
+      alert('Please provide a valid Supabase URL and Anon Key')
+      return
+    }
+    reconfigureSupabase(supabaseUrl.trim(), supabaseAnonKey.trim())
+    setCloudSaveSuccess(true)
+    setTimeout(() => setCloudSaveSuccess(false), 3000)
+    await testCloudConnection()
+    await syncManager.syncAll()
+  }
 
   const loadCashiers = async () => {
     try {
@@ -316,6 +362,101 @@ export function Settings({ settings, onSettingsSaved }: SettingsProps) {
               </tbody>
             </table>
           </div>
+        </div>
+
+        {/* Cloud Database & Multi-PC Synchronization */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+          <div className="flex items-center justify-between mb-4 border-b border-gray-100 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="bg-emerald-50 p-2 rounded-lg text-emerald-600">
+                <Cloud size={20} />
+              </div>
+              <div>
+                <h3 className="font-bold text-lg text-gray-800">Cloud Sync & Multi-PC Database</h3>
+                <p className="text-xs text-gray-500">Connects this PC with all other POS terminals and web wide order history</p>
+              </div>
+            </div>
+            <button 
+              type="button"
+              onClick={testCloudConnection}
+              disabled={isCloudTesting}
+              className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50"
+            >
+              <RefreshCw size={13} className={isCloudTesting ? 'animate-spin text-yolo-orange' : ''} />
+              {isCloudTesting ? 'Testing...' : 'Test Cloud Connection'}
+            </button>
+          </div>
+
+          {/* Connection Status Banner */}
+          {cloudStatus && (
+            <div className={`mb-5 p-3.5 rounded-xl border flex items-start gap-3 text-xs leading-relaxed ${
+              cloudStatus.isConnected 
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-800' 
+                : 'bg-amber-50 border-amber-200 text-amber-900'
+            }`}>
+              {cloudStatus.isConnected ? (
+                <CheckCircle2 size={18} className="text-emerald-600 shrink-0 mt-0.5" />
+              ) : (
+                <AlertTriangle size={18} className="text-amber-600 shrink-0 mt-0.5" />
+              )}
+              <div className="flex-1">
+                <p className="font-bold text-sm mb-0.5">
+                  {cloudStatus.isConnected ? 'Cloud Connection Active' : 'Cloud Database Unreachable'}
+                </p>
+                <p>{cloudStatus.message}</p>
+                {!cloudStatus.isConnected && (
+                  <p className="mt-1.5 text-xs text-amber-800/90 font-medium">
+                    Tip: If your Supabase free tier was paused, log in to Supabase and unpause the project, or paste your new project URL and Anon Key below.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          <form onSubmit={handleSaveSupabaseConfig} className="flex flex-col gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1 flex items-center gap-1.5">
+                <Globe size={13} className="text-gray-400" />
+                Supabase Project URL
+              </label>
+              <input 
+                type="text" 
+                value={supabaseUrl}
+                onChange={(e) => setSupabaseUrl(e.target.value)}
+                placeholder="https://your-project-id.supabase.co"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-yolo-red outline-none text-xs font-mono transition-all"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1 flex items-center gap-1.5">
+                <Key size={13} className="text-gray-400" />
+                Supabase Anon / Public Key
+              </label>
+              <input 
+                type="password" 
+                value={supabaseAnonKey}
+                onChange={(e) => setSupabaseAnonKey(e.target.value)}
+                placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-yolo-red outline-none text-xs font-mono transition-all"
+                required
+              />
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+              <span className="text-xs">
+                {cloudSaveSuccess && <span className="text-green-600 font-bold flex items-center gap-1">✓ Cloud credentials updated and synced!</span>}
+              </span>
+              <button
+                type="submit"
+                className="px-5 py-2 bg-yolo-dark hover:bg-black text-white rounded-lg text-xs font-bold transition-all shadow-sm active:scale-95 flex items-center gap-1.5"
+              >
+                <Save size={14} />
+                Save & Connect Cloud
+              </button>
+            </div>
+          </form>
         </div>
 
         {/* Printer Settings */}

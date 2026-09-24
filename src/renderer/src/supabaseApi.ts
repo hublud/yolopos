@@ -554,6 +554,7 @@ export const supabaseApi = {
         discount: Number(payload.discount || 0),
         tax: Number(payload.tax || 0),
         status: 'completed',
+        payment_method: payload.paymentMethod || 'cash',
         cashier_id: validCashierId,
         created_at: createdAt
       }
@@ -563,7 +564,7 @@ export const supabaseApi = {
 
       let { error: oErr } = await supabase.from('orders').insert(orderInsertData)
       if (oErr) {
-        console.warn('First order insert attempt error, retrying without cashier_id:', oErr)
+        console.warn('First order insert attempt error, retrying without cashier_id/payment_method:', oErr)
         const { error: retryErr } = await supabase.from('orders').insert({
           ...orderInsertData,
           cashier_id: null
@@ -631,9 +632,8 @@ export const supabaseApi = {
 
   getOrders: async () => {
     try {
-      const [ordersRes, itemsRes, cashiersRes, customersRes, productsRes] = await Promise.all([
+      const [ordersRes, cashiersRes, customersRes, productsRes] = await Promise.all([
         supabase.from('orders').select('*').order('created_at', { ascending: false }).limit(500),
-        supabase.from('order_items').select('*').limit(2000),
         supabase.from('cashiers').select('id, name'),
         supabase.from('customers').select('id, name'),
         supabase.from('products').select('id, name, category')
@@ -644,8 +644,18 @@ export const supabaseApi = {
         const customersMap = new Map<string, string>(((customersRes as any).data || []).map((c: any) => [c.id, c.name]))
         const productsMap = new Map<string, any>(((productsRes as any).data || []).map((p: any) => [p.id, p]))
         
+        const orderIds = ordersRes.data.map((o: any) => o.id).filter(Boolean)
+        let itemsList: any[] = []
+        if (orderIds.length > 0) {
+          const { data: itemsData } = await supabase
+            .from('order_items')
+            .select('*')
+            .in('order_id', orderIds.slice(0, 500))
+          itemsList = itemsData || []
+        }
+
         const itemsByOrder: { [key: string]: any[] } = {}
-        for (const it of ((itemsRes as any).data || [])) {
+        for (const it of itemsList) {
           if (!itemsByOrder[it.order_id]) itemsByOrder[it.order_id] = []
           const prod = productsMap.get(it.product_id)
           itemsByOrder[it.order_id].push({
