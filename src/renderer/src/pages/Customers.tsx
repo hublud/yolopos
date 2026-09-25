@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Users, Search, Plus, Star, X } from 'lucide-react'
+import { Search, Plus, Star, X } from 'lucide-react'
 import { api } from '../api'
 
 export function Customers() {
@@ -49,69 +49,93 @@ export function Customers() {
   )
 
   return (
-    <div className="p-8 h-full flex flex-col relative">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold text-yolo-dark">Customers</h2>
+    <div className="p-3.5 sm:p-6 md:p-8 h-full flex flex-col relative bg-gray-50">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 sm:mb-6">
+        <div>
+          <h2 className="text-xl sm:text-2xl font-black text-yolo-dark">Customers</h2>
+          <p className="text-xs sm:text-sm text-gray-500">Manage customer loyalty points and contact directory</p>
+        </div>
         <button 
           onClick={() => setShowModal(true)}
-          className="bg-yolo-red text-white px-4 py-2 rounded-xl flex items-center gap-2 font-medium hover:bg-red-700 transition-colors shadow-sm"
+          className="bg-yolo-red text-white px-3.5 py-2 rounded-xl flex items-center justify-center gap-2 text-xs font-bold hover:bg-red-700 transition-colors shadow-sm self-start sm:self-auto active:scale-95"
         >
-          <Plus size={18} />
+          <Plus size={16} />
           New Customer
         </button>
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col flex-1 overflow-hidden">
-        <div className="p-4 border-b border-gray-100">
+        <div className="p-3 sm:p-4 border-b border-gray-100">
           <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
             <input 
               type="text" 
               placeholder="Search customers by name or phone..." 
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-yolo-red focus:border-transparent text-sm transition-all"
+              className="w-full pl-9 pr-4 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-yolo-red focus:border-transparent text-xs sm:text-sm transition-all bg-gray-50/50"
             />
           </div>
         </div>
         
         <div className="flex-1 overflow-y-auto custom-scrollbar">
-          <table className="w-full text-left border-collapse">
+          {/* Desktop Table View */}
+          <table className="hidden sm:table w-full text-left border-collapse">
             <thead className="bg-gray-50 sticky top-0 z-10 text-xs font-bold text-gray-500 uppercase">
               <tr>
-                <th className="px-6 py-4">Customer Name</th>
-                <th className="px-6 py-4">Phone Number</th>
-                <th className="px-6 py-4">Loyalty Points</th>
+                <th className="px-6 py-3.5">Customer Name</th>
+                <th className="px-6 py-3.5">Phone Number</th>
+                <th className="px-6 py-3.5">Loyalty Points</th>
               </tr>
             </thead>
             <tbody className="text-sm">
               {filteredCustomers.map((c: any) => (
-                <tr key={c.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors cursor-pointer">
-                  <td className="px-6 py-4 font-semibold text-gray-800 flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 font-bold">
+                <tr key={c.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                  <td className="px-6 py-3.5 font-semibold text-gray-800 flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 font-bold shrink-0">
                       {c.name.charAt(0)}
                     </div>
-                    {c.name}
+                    <span>{c.name}</span>
                   </td>
-                  <td className="px-6 py-4 text-gray-500">{c.phone}</td>
-                  <td className="px-6 py-4">
+                  <td className="px-6 py-3.5 text-gray-500">{c.phone}</td>
+                  <td className="px-6 py-3.5">
                     <div className="flex items-center gap-1 font-bold text-orange-500">
                       <Star size={16} className="fill-orange-500" />
-                      {c.loyaltyPoints} pts
+                      {c.loyalty_points || c.loyaltyPoints || 0} pts
                     </div>
                   </td>
                 </tr>
               ))}
-              {filteredCustomers.length === 0 && (
-                <tr>
-                  <td colSpan={3} className="text-center py-12 text-gray-500">
-                    <Users className="mx-auto mb-3 opacity-50" size={48} />
-                    No customers found
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
+
+          {/* Mobile Card List View */}
+          <div className="sm:hidden divide-y divide-gray-100 p-2">
+            {filteredCustomers.map((c: any) => (
+              <div key={c.id} className="py-3 px-2 flex items-center justify-between">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-9 h-9 rounded-full bg-red-50 text-yolo-red flex items-center justify-center font-bold text-xs shrink-0">
+                    {c.name.charAt(0)}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-bold text-xs text-gray-800 truncate">{c.name}</p>
+                    <p className="text-[11px] text-gray-400">{c.phone || 'No phone'}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1 font-bold text-xs text-orange-500 shrink-0 ml-2 bg-orange-50 px-2 py-1 rounded-lg">
+                  <Star size={12} className="fill-orange-500" />
+                  <span>{c.loyalty_points || c.loyaltyPoints || 0} pts</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {filteredCustomers.length === 0 && (
+            <div className="p-8 text-center text-gray-400 text-xs">
+              No customers found.
+            </div>
+          )}
         </div>
       </div>
 

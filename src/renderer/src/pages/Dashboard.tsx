@@ -426,41 +426,43 @@ export function Dashboard() {
   }
 
   return (
-    <div className="p-8 h-full overflow-y-auto custom-scrollbar bg-gray-50">
+    <div className="p-3.5 sm:p-6 md:p-8 h-full overflow-y-auto custom-scrollbar bg-gray-50">
       
       {/* Upper header section */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 sm:gap-4 mb-5 sm:mb-8">
         <div>
-          <h2 className="text-2xl font-bold text-yolo-dark">Analytics Dashboard</h2>
-          <p className="text-sm text-gray-500 mt-1">Monitor sales metrics, transaction histories, and beverage popularity.</p>
+          <h2 className="text-xl sm:text-2xl font-black text-yolo-dark tracking-tight">Analytics Dashboard</h2>
+          <p className="text-xs sm:text-sm text-gray-500 mt-0.5">Monitor sales metrics, transaction histories, and beverage popularity.</p>
         </div>
 
         {/* Date Filter Controls, PDF Export & Refresh */}
         <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={() => setShowReportModal(true)}
-            className="bg-yolo-red hover:bg-red-700 text-white shadow-sm shadow-red-200 px-3.5 py-2 rounded-2xl active:scale-95 transition-all flex items-center gap-1.5 text-xs font-bold"
+            className="bg-yolo-red hover:bg-red-700 text-white shadow-sm shadow-red-200 px-3 py-2 sm:px-3.5 rounded-xl sm:rounded-2xl active:scale-95 transition-all flex items-center gap-1.5 text-xs font-bold shrink-0"
             title="Download Official Sales Report in PDF"
           >
             <FileDown size={14} />
-            <span>Download PDF Report</span>
+            <span className="hidden sm:inline">Download PDF Report</span>
+            <span className="sm:hidden">PDF Report</span>
           </button>
 
           <button
             onClick={handleManualRefresh}
             disabled={isRefreshing}
-            className="bg-white hover:bg-gray-50 border border-gray-100 shadow-sm px-3.5 py-2 rounded-2xl text-gray-600 hover:text-yolo-dark active:scale-95 transition-all flex items-center gap-1.5 text-xs font-semibold"
+            className="bg-white hover:bg-gray-50 border border-gray-200/80 shadow-sm px-3 py-2 sm:px-3.5 rounded-xl sm:rounded-2xl text-gray-600 hover:text-yolo-dark active:scale-95 transition-all flex items-center gap-1.5 text-xs font-semibold shrink-0"
             title="Fetch Latest Real-time Transactions from Cloud"
           >
             <RefreshCw size={13} className={isRefreshing ? 'animate-spin text-yolo-red' : 'text-yolo-red'} />
-            <span>Live Refresh</span>
+            <span className="hidden sm:inline">Live Refresh</span>
+            <span className="sm:hidden">Sync</span>
           </button>
 
-          <div className="bg-white p-2 rounded-2xl border border-gray-100 shadow-sm flex flex-wrap items-center gap-2">
-            <div className="flex bg-gray-100 p-1 rounded-xl">
+          <div className="bg-white p-1.5 sm:p-2 rounded-xl sm:rounded-2xl border border-gray-100 shadow-sm flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            <div className="flex bg-gray-100 p-0.5 sm:p-1 rounded-xl w-full sm:w-auto overflow-x-auto">
               <button
                 onClick={() => setFilterMode('today')}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                className={`flex-1 sm:flex-initial px-2.5 sm:px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
                   filterMode === 'today' 
                     ? 'bg-white text-yolo-dark shadow-sm' 
                     : 'text-gray-500 hover:text-yolo-dark'
@@ -470,7 +472,7 @@ export function Dashboard() {
               </button>
               <button
                 onClick={() => setFilterMode('all')}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                className={`flex-1 sm:flex-initial px-2.5 sm:px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
                   filterMode === 'all' 
                     ? 'bg-white text-yolo-dark shadow-sm' 
                     : 'text-gray-500 hover:text-yolo-dark'
@@ -480,47 +482,47 @@ export function Dashboard() {
               </button>
               <button
                 onClick={() => setFilterMode('date')}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                className={`flex-1 sm:flex-initial px-2.5 sm:px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
                   filterMode === 'date' 
                     ? 'bg-white text-yolo-dark shadow-sm' 
                     : 'text-gray-500 hover:text-yolo-dark'
                 }`}
               >
-                Specific Date
+                Date
               </button>
               <button
                 onClick={() => setFilterMode('month')}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                className={`flex-1 sm:flex-initial px-2.5 sm:px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
                   filterMode === 'month' 
                     ? 'bg-white text-yolo-dark shadow-sm' 
                     : 'text-gray-500 hover:text-yolo-dark'
                 }`}
               >
-                Monthly
+                Month
               </button>
             </div>
 
             {/* Conditional Picker Fields */}
             {filterMode === 'date' && (
-              <div className="flex items-center gap-2 pl-2">
-                <Calendar size={14} className="text-gray-400" />
+              <div className="flex items-center gap-2 pl-2 w-full sm:w-auto pt-1 sm:pt-0">
+                <Calendar size={14} className="text-gray-400 shrink-0" />
                 <input
                   type="date"
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
-                  className="text-xs font-semibold border-0 focus:ring-0 text-gray-700 bg-transparent p-0 cursor-pointer outline-none"
+                  className="text-xs font-semibold border-0 focus:ring-0 text-gray-700 bg-transparent p-0 cursor-pointer outline-none w-full"
                 />
               </div>
             )}
 
             {filterMode === 'month' && (
-              <div className="flex items-center gap-2 pl-2">
-                <Calendar size={14} className="text-gray-400" />
+              <div className="flex items-center gap-2 pl-2 w-full sm:w-auto pt-1 sm:pt-0">
+                <Calendar size={14} className="text-gray-400 shrink-0" />
                 <input
                   type="month"
                   value={selectedMonth}
                   onChange={(e) => setSelectedMonth(e.target.value)}
-                  className="text-xs font-semibold border-0 focus:ring-0 text-gray-700 bg-transparent p-0 cursor-pointer outline-none"
+                  className="text-xs font-semibold border-0 focus:ring-0 text-gray-700 bg-transparent p-0 cursor-pointer outline-none w-full"
                 />
               </div>
             )}
@@ -529,68 +531,68 @@ export function Dashboard() {
       </div>
 
       {/* Overview Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6 mb-5 sm:mb-8">
         
         {/* Metric 1: Revenue */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
-          <div>
-            <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-1">
+        <div className="bg-white p-3.5 sm:p-5 md:p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
+          <div className="min-w-0 flex-1 mr-2">
+            <p className="text-[10px] sm:text-xs text-gray-400 font-bold uppercase tracking-wider mb-0.5 sm:mb-1 truncate">
               {filterMode === 'all' ? "Total Revenue" : filterMode === 'today' ? "Today's Revenue" : filterMode === 'date' ? "Date's Revenue" : "Monthly Revenue"}
             </p>
-            <h3 className="text-2xl font-black text-yolo-dark">{formatCurrency(totalRevenue)}</h3>
+            <h3 className="text-base sm:text-xl md:text-2xl font-black text-yolo-dark truncate">{formatCurrency(totalRevenue)}</h3>
           </div>
-          <div className="w-12 h-12 bg-green-50 text-green-500 rounded-2xl flex items-center justify-center shadow-inner">
-            <Coins size={24} />
+          <div className="w-9 h-9 sm:w-11 sm:h-11 md:w-12 md:h-12 bg-green-50 text-green-500 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-inner shrink-0">
+            <Coins size={20} className="sm:w-6 sm:h-6" />
           </div>
         </div>
 
         {/* Metric 2: Total Orders */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
-          <div>
-            <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-1">Total Sales Orders</p>
-            <h3 className="text-2xl font-black text-yolo-dark">{totalOrdersCount}</h3>
+        <div className="bg-white p-3.5 sm:p-5 md:p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
+          <div className="min-w-0 flex-1 mr-2">
+            <p className="text-[10px] sm:text-xs text-gray-400 font-bold uppercase tracking-wider mb-0.5 sm:mb-1 truncate">Total Sales</p>
+            <h3 className="text-base sm:text-xl md:text-2xl font-black text-yolo-dark truncate">{totalOrdersCount} <span className="text-xs font-normal text-gray-400 hidden sm:inline">Orders</span></h3>
           </div>
-          <div className="w-12 h-12 bg-blue-50 text-blue-500 rounded-2xl flex items-center justify-center shadow-inner">
-            <ShoppingBag size={24} />
+          <div className="w-9 h-9 sm:w-11 sm:h-11 md:w-12 md:h-12 bg-blue-50 text-blue-500 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-inner shrink-0">
+            <ShoppingBag size={20} className="sm:w-6 sm:h-6" />
           </div>
         </div>
 
         {/* Metric 3: Average Order Value */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
-          <div>
-            <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-1">Average Order Value</p>
-            <h3 className="text-2xl font-black text-yolo-dark">{formatCurrency(averageOrderValue)}</h3>
+        <div className="bg-white p-3.5 sm:p-5 md:p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
+          <div className="min-w-0 flex-1 mr-2">
+            <p className="text-[10px] sm:text-xs text-gray-400 font-bold uppercase tracking-wider mb-0.5 sm:mb-1 truncate">Avg. Order</p>
+            <h3 className="text-base sm:text-xl md:text-2xl font-black text-yolo-dark truncate">{formatCurrency(averageOrderValue)}</h3>
           </div>
-          <div className="w-12 h-12 bg-purple-50 text-purple-500 rounded-2xl flex items-center justify-center shadow-inner">
-            <ArrowUpRight size={24} />
+          <div className="w-9 h-9 sm:w-11 sm:h-11 md:w-12 md:h-12 bg-purple-50 text-purple-500 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-inner shrink-0">
+            <ArrowUpRight size={20} className="sm:w-6 sm:h-6" />
           </div>
         </div>
 
         {/* Metric 4: Low Stock Alerts */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
-          <div>
-            <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-1">Low Stock Alerts</p>
-            <h3 className="text-2xl font-black text-yolo-dark">{lowStockAlertsCount}</h3>
+        <div className="bg-white p-3.5 sm:p-5 md:p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
+          <div className="min-w-0 flex-1 mr-2">
+            <p className="text-[10px] sm:text-xs text-gray-400 font-bold uppercase tracking-wider mb-0.5 sm:mb-1 truncate">Low Stock</p>
+            <h3 className="text-base sm:text-xl md:text-2xl font-black text-yolo-dark truncate">{lowStockAlertsCount} <span className="text-xs font-normal text-gray-400 hidden sm:inline">Items</span></h3>
           </div>
-          <div className="w-12 h-12 bg-red-50 text-yolo-red rounded-2xl flex items-center justify-center shadow-inner">
-            <AlertTriangle size={24} />
+          <div className="w-9 h-9 sm:w-11 sm:h-11 md:w-12 md:h-12 bg-red-50 text-yolo-red rounded-xl sm:rounded-2xl flex items-center justify-center shadow-inner shrink-0">
+            <AlertTriangle size={20} className="sm:w-6 sm:h-6" />
           </div>
         </div>
       </div>
 
       {/* Main content split panel */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 sm:gap-6">
         
         {/* Left Side: Recent Activity (Order Feed) */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 min-h-[450px] lg:col-span-3 flex flex-col">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <div className="bg-white p-4 sm:p-6 rounded-2xl shadow-sm border border-gray-100 min-h-[400px] lg:col-span-3 flex flex-col">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 sm:mb-6">
             <div>
-              <h3 className="font-bold text-lg text-yolo-dark">Recent Transactions</h3>
-              <p className="text-xs text-gray-500">Showing {searchedOrders.length} records matching current filter</p>
+              <h3 className="font-bold text-base sm:text-lg text-yolo-dark">Recent Transactions</h3>
+              <p className="text-[11px] sm:text-xs text-gray-500">Showing {searchedOrders.length} records matching current filter</p>
             </div>
             
             {/* Search orders */}
-            <div className="relative">
+            <div className="relative w-full sm:w-auto">
               <input
                 type="text"
                 placeholder="Search order, cashier..."
@@ -603,7 +605,7 @@ export function Dashboard() {
           </div>
 
           {/* List/Table of Orders */}
-          <div className="flex-1 overflow-y-auto max-h-[360px] custom-scrollbar">
+          <div className="flex-1 overflow-y-auto max-h-[420px] custom-scrollbar">
             {searchedOrders.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-gray-400 py-12">
                 <ClipboardList size={40} strokeWidth={1.5} className="mb-2" />
@@ -611,8 +613,9 @@ export function Dashboard() {
                 <p className="text-xs">Checkout items at POS to view records here.</p>
               </div>
             ) : (
-              <div className="w-full text-left border-collapse">
-                <div className="grid grid-cols-12 border-b border-gray-100 pb-2 text-xs font-bold text-gray-400 uppercase tracking-wider">
+              <div>
+                {/* Desktop View: Grid Table Header */}
+                <div className="hidden sm:grid grid-cols-12 border-b border-gray-100 pb-2 text-xs font-bold text-gray-400 uppercase tracking-wider px-2">
                   <div className="col-span-3">Order Number</div>
                   <div className="col-span-3">Date / Time</div>
                   <div className="col-span-2">Cashier</div>
@@ -620,44 +623,91 @@ export function Dashboard() {
                   <div className="col-span-2 text-right pr-2">Actions</div>
                 </div>
 
-                <div className="divide-y divide-gray-50">
+                {/* Mobile & Desktop List */}
+                <div className="divide-y divide-gray-100 sm:divide-gray-50">
                   {searchedOrders.map((order) => (
-                    <div 
-                      key={order.id} 
-                      onClick={() => setActiveOrder(order)}
-                      className="grid grid-cols-12 py-3 items-center text-xs text-gray-600 hover:bg-red-50/60 hover:text-yolo-dark cursor-pointer rounded-xl px-2 transition-all active:scale-[0.99] group"
-                    >
-                      <div className="col-span-3 font-bold text-yolo-dark group-hover:text-yolo-red transition-colors flex items-center gap-1.5">
-                        <Receipt size={13} className="text-gray-400 group-hover:text-yolo-red" />
-                        #{order.orderNumber}
+                    <div key={order.id}>
+                      {/* Desktop Grid Row (sm and up) */}
+                      <div 
+                        onClick={() => setActiveOrder(order)}
+                        className="hidden sm:grid grid-cols-12 py-3 items-center text-xs text-gray-600 hover:bg-red-50/60 hover:text-yolo-dark cursor-pointer rounded-xl px-2 transition-all active:scale-[0.99] group"
+                      >
+                        <div className="col-span-3 font-bold text-yolo-dark group-hover:text-yolo-red transition-colors flex items-center gap-1.5 truncate">
+                          <Receipt size={13} className="text-gray-400 group-hover:text-yolo-red shrink-0" />
+                          #{order.orderNumber}
+                        </div>
+                        <div className="col-span-3">
+                          <span className="font-medium text-gray-700 block">{formatDate(order.createdAt)}</span>
+                          <span className="text-[10px] text-gray-400 block mt-0.5">{formatTime(order.createdAt)}</span>
+                        </div>
+                        <div className="col-span-2 font-medium text-gray-700 truncate">
+                          {order.cashierName || 'Staff'}
+                        </div>
+                        <div className="col-span-2 text-right font-bold text-yolo-dark">
+                          {formatCurrency(order.total)}
+                        </div>
+                        <div className="col-span-2 flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            onClick={() => setActiveOrder(order)}
+                            title="View Receipt"
+                            className="p-1.5 hover:bg-red-100/80 text-gray-400 hover:text-yolo-red rounded-lg transition-all"
+                          >
+                            <Receipt size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => handleRequestDelete(order, e)}
+                            title="Delete Order (Super Admin Required)"
+                            className="p-1.5 hover:bg-red-100 text-gray-400 hover:text-red-600 rounded-lg transition-all"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </div>
-                      <div className="col-span-3">
-                        <span className="font-medium text-gray-700 block">{formatDate(order.createdAt)}</span>
-                        <span className="text-[10px] text-gray-400 block mt-0.5">{formatTime(order.createdAt)}</span>
-                      </div>
-                      <div className="col-span-2 font-medium text-gray-700">
-                        {order.cashierName || 'Staff'}
-                      </div>
-                      <div className="col-span-2 text-right font-bold text-yolo-dark">
-                        {formatCurrency(order.total)}
-                      </div>
-                      <div className="col-span-2 flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          type="button"
-                          onClick={() => setActiveOrder(order)}
-                          title="View Receipt"
-                          className="p-1.5 hover:bg-red-100/80 text-gray-400 hover:text-yolo-red rounded-lg transition-all"
-                        >
-                          <Receipt size={14} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => handleRequestDelete(order, e)}
-                          title="Delete Order (Super Admin Required)"
-                          className="p-1.5 hover:bg-red-100 text-gray-400 hover:text-red-600 rounded-lg transition-all"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+
+                      {/* Mobile Card Row (below sm) */}
+                      <div 
+                        onClick={() => setActiveOrder(order)}
+                        className="sm:hidden py-3 px-1 flex flex-col gap-2 hover:bg-red-50/50 cursor-pointer rounded-xl transition-all active:scale-[0.98]"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 font-bold text-sm text-yolo-dark">
+                            <Receipt size={14} className="text-yolo-red shrink-0" />
+                            <span>#{order.orderNumber}</span>
+                          </div>
+                          <span className="font-black text-sm text-yolo-dark">
+                            {formatCurrency(order.total)}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between text-xs text-gray-500">
+                          <div className="flex items-center gap-2">
+                            <span>{formatDate(order.createdAt)} {formatTime(order.createdAt)}</span>
+                            <span>•</span>
+                            <span className="font-medium text-gray-700">{order.cashierName || 'Staff'}</span>
+                          </div>
+
+                          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              type="button"
+                              onClick={() => setActiveOrder(order)}
+                              title="View Receipt"
+                              className="px-2 py-1 bg-gray-100 hover:bg-red-50 text-gray-700 hover:text-yolo-red rounded-lg text-[11px] font-bold transition-all flex items-center gap-1"
+                            >
+                              <Receipt size={12} />
+                              Receipt
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => handleRequestDelete(order, e)}
+                              title="Delete Order"
+                              className="p-1 text-gray-400 hover:text-red-600 rounded-lg transition-all"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   ))}

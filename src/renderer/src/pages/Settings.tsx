@@ -209,10 +209,13 @@ export function Settings({ settings, onSettingsSaved }: SettingsProps) {
   }
 
   return (
-    <div className="p-8 h-full overflow-y-auto custom-scrollbar">
-      <h2 className="text-2xl font-bold text-yolo-dark mb-6">System Settings</h2>
+    <div className="p-3.5 sm:p-6 md:p-8 h-full overflow-y-auto custom-scrollbar bg-gray-50">
+      <div className="mb-4 sm:mb-6">
+        <h2 className="text-xl sm:text-2xl font-black text-yolo-dark">System Settings</h2>
+        <p className="text-xs sm:text-sm text-gray-500">Configure business information, database connection, and staff access</p>
+      </div>
       
-      <div className="max-w-3xl flex flex-col gap-6">
+      <div className="max-w-3xl flex flex-col gap-4 sm:gap-6">
         
         {/* Business Settings */}
         <form onSubmit={handleSave} className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
