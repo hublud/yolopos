@@ -1,4 +1,4 @@
-import { supabase } from '../supabaseClient'
+import { supabase, getSupabaseConfig } from '../supabaseClient'
 
 export interface QueueItem {
   id: string
@@ -28,13 +28,14 @@ class SyncManager {
     
     // Periodically verify connectivity and flush pending offline queue
     setInterval(() => {
-      this.forceCheck()
-      if (this.isOnline && !this.isSyncing) {
-        this.getPendingCount().then(count => {
-          if (count > 0) this.syncPendingData()
-        })
-      }
-    }, 8000)
+      this.forceCheck().then(online => {
+        if (online && !this.isSyncing) {
+          this.getPendingCount().then(count => {
+            if (count > 0) this.syncPendingData()
+          })
+        }
+      })
+    }, 15000)
 
     // Initial connectivity check and sync
     setTimeout(() => {
@@ -102,10 +103,33 @@ class SyncManager {
         return false
       }
 
-      const { data, error } = await supabase.from('products').select('id').limit(1)
-      const isReachable = !error && data !== null
-      this.setOnline(isReachable)
-      return isReachable
+      const cfg = getSupabaseConfig()
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 6000)
+      try {
+        const resp = await fetch(`${cfg.url}/rest/v1/products?select=id&limit=1`, {
+          method: 'GET',
+          headers: {
+            'apikey': cfg.key,
+            'Authorization': `Bearer ${cfg.key}`
+          },
+          signal: controller.signal
+        })
+        clearTimeout(timeout)
+        const isReachable = resp.ok || resp.status < 500
+        this.setOnline(isReachable)
+        return isReachable
+      } catch (err) {
+        clearTimeout(timeout)
+        // If navigator still says online, don't hastily flip to offline on a single transient timeout
+        if (typeof navigator !== 'undefined' && navigator.onLine) {
+          // Keep current state or retry once before marking offline
+          console.warn('[forceCheck] Transient fetch error:', err)
+        } else {
+          this.setOnline(false)
+        }
+        return false
+      }
     } catch {
       this.setOnline(false)
       return false
@@ -262,7 +286,7 @@ class SyncManager {
               discount: Number(order.discount || 0),
               tax: Number(order.tax || 0),
               status: order.status || 'completed',
-              payment_method: order.paymentMethod || order.payment_method || 'cash',
+              // Note: payment_method column does not exist in Supabase orders table — omitted
               created_at: Number(order.createdAt || Date.now())
             }
 
@@ -486,11 +510,15 @@ class SyncManager {
     } catch (e: any) {
       console.warn('Sync error:', e)
       this.isSyncing = false
-      this.setOnline(false)
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        this.setOnline(false)
+      } else {
+        this.forceCheck().catch(() => {})
+      }
       this.notify()
       return {
         success: false,
-        message: 'Sync failed: ' + (e.message || 'Unable to connect to Supabase cloud database.'),
+        message: 'Sync error: ' + (e.message || 'Error communicating with Supabase cloud database.'),
         syncedCount
       }
     }

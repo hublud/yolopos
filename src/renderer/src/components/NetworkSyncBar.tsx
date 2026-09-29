@@ -14,6 +14,8 @@ export function NetworkSyncBar() {
       setPendingCount(pending)
       setIsSyncing(syncManager.getNetworkStatus().isSyncing)
     })
+    // Immediately check real connectivity on mount
+    syncManager.forceCheck()
     return () => unsubscribe()
   }, [])
 

@@ -266,7 +266,67 @@ export function Dashboard() {
 
   const handleManualRefresh = () => {
     setIsRefreshing(true)
-    loadData(false)
+    // Also push any locally cached orders that haven't made it to the cloud
+    pushCachedOrdersToCloud().then(() => loadData(false))
+  }
+
+  // Push locally cached orders (from localStorage) up to Supabase cloud
+  const pushCachedOrdersToCloud = async () => {
+    try {
+      const { supabase } = await import('../supabaseClient')
+      const cachedRaw = localStorage.getItem('pos_cache_orders')
+      if (!cachedRaw) return
+      const cachedOrders: Order[] = JSON.parse(cachedRaw)
+      if (!cachedOrders || cachedOrders.length === 0) return
+
+      // Fetch cloud order IDs to know which are missing
+      const { data: cloudIds } = await supabase.from('orders').select('id')
+      const cloudIdSet = new Set((cloudIds || []).map((o: any) => o.id))
+
+      const missingOrders = cachedOrders.filter(o => o && o.id && !cloudIdSet.has(o.id))
+      if (missingOrders.length === 0) return
+
+      console.log(`[pushCachedOrdersToCloud] Uploading ${missingOrders.length} cached order(s) to Supabase...`)
+
+      for (const order of missingOrders) {
+        const validCashierId = (order.cashierId === 'cashier-admin' || order.cashierId === 'cashier-staff')
+          ? order.cashierId : 'cashier-staff'
+
+        const orderRow: any = {
+          id: order.id,
+          order_number: String(order.orderNumber || order.id),
+          total: Number(order.total || 0),
+          discount: Number(order.discount || 0),
+          tax: Number(order.tax || 0),
+          status: order.status || 'completed',
+          cashier_id: validCashierId,
+          created_at: Number(order.createdAt || Date.now())
+        }
+        if (order.customerId) orderRow.customer_id = order.customerId
+
+        const { error: oErr } = await supabase.from('orders').upsert(orderRow)
+        if (oErr) {
+          console.warn('[pushCachedOrdersToCloud] order upsert error:', oErr)
+          continue
+        }
+
+        // Push order items
+        if (order.items && order.items.length > 0) {
+          const itemRows = order.items.map((it, idx) => ({
+            id: `${order.id}-item-${idx}`,
+            order_id: order.id,
+            product_id: String(it.productId),
+            variant_name: it.variantName || null,
+            quantity: Number(it.quantity || 1),
+            price: Number(it.price || 0)
+          }))
+          await supabase.from('order_items').upsert(itemRows).catch(() => {})
+        }
+        console.log(`[pushCachedOrdersToCloud] Uploaded order #${order.orderNumber}`)
+      }
+    } catch (e) {
+      console.warn('[pushCachedOrdersToCloud] Error:', e)
+    }
   }
 
   // Get local date string YYYY-MM-DD from timestamp

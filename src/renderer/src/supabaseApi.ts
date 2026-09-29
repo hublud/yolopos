@@ -274,8 +274,10 @@ export const supabaseApi = {
   getCashiers: async () => {
     try {
       const { data, error } = await supabase.from('cashiers').select('*')
+      // Set online if Supabase responded (even if error)
+      syncManager.setOnline(true)
+      if (error) console.warn('[getCashiers] Supabase error:', error)
       if (!error && data && data.length > 0) {
-        syncManager.setOnline(true)
         syncManager.setCache('cashiers', data)
         return data
       }
@@ -333,8 +335,10 @@ export const supabaseApi = {
   getProducts: async () => {
     try {
       const { data, error } = await supabase.from('products').select('*').order('name', { ascending: true })
+      // Set online if Supabase responded at all
+      syncManager.setOnline(true)
+      if (error) console.warn('[getProducts] Supabase error:', error)
       if (!error && data && data.length > 0) {
-        syncManager.setOnline(true)
         const formatted = data.map(p => ({
           id: p.id,
           name: p.name,
@@ -554,7 +558,7 @@ export const supabaseApi = {
         discount: Number(payload.discount || 0),
         tax: Number(payload.tax || 0),
         status: 'completed',
-        payment_method: payload.paymentMethod || 'cash',
+        // Note: payment_method column does not exist in orders table — omitted
         cashier_id: validCashierId,
         created_at: createdAt
       }
@@ -564,7 +568,7 @@ export const supabaseApi = {
 
       let { error: oErr } = await supabase.from('orders').insert(orderInsertData)
       if (oErr) {
-        console.warn('First order insert attempt error, retrying without cashier_id/payment_method:', oErr)
+        console.warn('Order insert error, retrying without cashier_id:', oErr)
         const { error: retryErr } = await supabase.from('orders').insert({
           ...orderInsertData,
           cashier_id: null
@@ -639,6 +643,13 @@ export const supabaseApi = {
         supabase.from('products').select('id, name, category')
       ])
 
+      // Log any Supabase errors for debugging
+      if (ordersRes.error) console.warn('[getOrders] orders error:', ordersRes.error)
+      if ((cashiersRes as any).error) console.warn('[getOrders] cashiers error:', (cashiersRes as any).error)
+
+      // Mark online if Supabase responded at all (even with RLS error)
+      syncManager.setOnline(true)
+
       if (ordersRes.data && Array.isArray(ordersRes.data)) {
         const cashiersMap = new Map<string, string>(((cashiersRes as any).data || []).map((c: any) => [c.id, c.name]))
         const customersMap = new Map<string, string>(((customersRes as any).data || []).map((c: any) => [c.id, c.name]))
@@ -705,6 +716,45 @@ export const supabaseApi = {
         const cloudIds = new Set(cloudOrders.map(o => o.id))
         const pendingLocalOrders = localCached.filter(o => o && o.id && !cloudIds.has(o.id))
 
+        // Auto-push any local orders to Supabase if they are not yet in the cloud
+        if (pendingLocalOrders.length > 0) {
+          (async () => {
+            for (const order of pendingLocalOrders) {
+              try {
+                const validCashierId = (order.cashierId === 'cashier-admin' || order.cashierId === 'cashier-staff')
+                  ? order.cashierId : 'cashier-staff'
+
+                const orderRow: any = {
+                  id: String(order.id),
+                  order_number: String(order.orderNumber || order.id),
+                  total: Number(order.total || 0),
+                  discount: Number(order.discount || 0),
+                  tax: Number(order.tax || 0),
+                  status: order.status || 'completed',
+                  cashier_id: validCashierId,
+                  created_at: Number(order.createdAt || Date.now())
+                }
+                if (order.customerId) orderRow.customer_id = order.customerId
+
+                const { error: oErr } = await supabase.from('orders').upsert(orderRow)
+                if (!oErr && order.items && Array.isArray(order.items) && order.items.length > 0) {
+                  const itemRows = order.items.map((it: any, idx: number) => ({
+                    id: `${order.id}-item-${idx}`,
+                    order_id: String(order.id),
+                    product_id: String(it.productId),
+                    variant_name: it.variantName || null,
+                    quantity: Number(it.quantity || 1),
+                    price: Number(it.price || 0)
+                  }))
+                  await supabase.from('order_items').upsert(itemRows).catch(() => {})
+                }
+              } catch (pushErr) {
+                console.warn('[getOrders] Auto-sync local order error:', pushErr)
+              }
+            }
+          })().catch(() => {})
+        }
+
         const fullOrders = [...pendingLocalOrders, ...cloudOrders].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
 
         syncManager.setOnline(true)
@@ -744,8 +794,9 @@ export const supabaseApi = {
   getCustomers: async () => {
     try {
       const { data, error } = await supabase.from('customers').select('*').order('name', { ascending: true })
+      syncManager.setOnline(true)
+      if (error) console.warn('[getCustomers] Supabase error:', error)
       if (!error && data && data.length > 0) {
-        syncManager.setOnline(true)
         const formatted = data.map(c => ({
           id: c.id,
           name: c.name,
@@ -813,8 +864,9 @@ export const supabaseApi = {
   getSettings: async () => {
     try {
       const { data, error } = await supabase.from('settings').select('*').limit(1)
+      syncManager.setOnline(true)
+      if (error) console.warn('[getSettings] Supabase error:', error)
       if (!error && data && data.length > 0) {
-        syncManager.setOnline(true)
         const row = data[0]
         const formatted = {
           id: 1,
