@@ -255,8 +255,8 @@ export const supabaseApi = {
     if (trimmedPin === '5555') {
       return { id: 'cashier-staff', name: 'Staff', pin: '5555', role: 'cashier' }
     }
-    if (trimmedPin === '1282') {
-      return { id: 'cashier-admin', name: 'Admin', pin: '1282', role: 'admin' }
+    if (trimmedPin === '1282' || trimmedPin === '1234') {
+      return { id: 'cashier-admin', name: 'Admin', pin: trimmedPin, role: 'admin' }
     }
 
     try {
