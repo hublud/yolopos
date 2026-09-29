@@ -103,33 +103,45 @@ class SyncManager {
         return false
       }
 
+      // Strategy 1: raw fetch probe (fast, but may fail in Electron due to sandbox/CORS)
       const cfg = getSupabaseConfig()
-      const controller = new AbortController()
-      const timeout = setTimeout(() => controller.abort(), 6000)
       try {
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 5000)
         const resp = await fetch(`${cfg.url}/rest/v1/products?select=id&limit=1`, {
           method: 'GET',
-          headers: {
-            'apikey': cfg.key,
-            'Authorization': `Bearer ${cfg.key}`
-          },
+          headers: { 'apikey': cfg.key, 'Authorization': `Bearer ${cfg.key}` },
           signal: controller.signal
         })
         clearTimeout(timeout)
-        const isReachable = resp.ok || resp.status < 500
-        this.setOnline(isReachable)
-        return isReachable
-      } catch (err) {
-        clearTimeout(timeout)
-        // If navigator still says online, don't hastily flip to offline on a single transient timeout
-        if (typeof navigator !== 'undefined' && navigator.onLine) {
-          // Keep current state or retry once before marking offline
-          console.warn('[forceCheck] Transient fetch error:', err)
-        } else {
-          this.setOnline(false)
+        if (resp.ok || resp.status < 500) {
+          this.setOnline(true)
+          return true
         }
+      } catch (fetchErr) {
+        console.warn('[forceCheck] Raw fetch probe failed, trying Supabase client fallback:', fetchErr)
+      }
+
+      // Strategy 2: Supabase JS client query (works in Electron, no CORS issues)
+      try {
+        const { data, error } = await supabase.from('products').select('id').limit(1)
+        const reachable = !error || error.code !== 'PGRST301'
+        if (reachable) {
+          this.setOnline(true)
+          return true
+        }
+      } catch (clientErr) {
+        console.warn('[forceCheck] Supabase client fallback failed:', clientErr)
+      }
+
+      // Both failed — only go offline if navigator also says offline
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        this.setOnline(false)
         return false
       }
+      // navigator says online but both probes failed — transient, keep current online state
+      console.warn('[forceCheck] Both probes failed but navigator.onLine=true — keeping current state')
+      return this.isOnline
     } catch {
       this.setOnline(false)
       return false
@@ -434,8 +446,21 @@ class SyncManager {
     let syncedCount = 0
 
     try {
-      const isReachable = await this.forceCheck()
-      if (!isReachable) {
+      // Run connectivity check but don't abort sync solely based on it —
+      // let the actual Supabase calls determine reachability to avoid false negatives in Electron
+      await this.forceCheck()
+
+      // Verify with a direct Supabase ping before declaring unreachable
+      let canReachSupabase = this.isOnline
+      if (!canReachSupabase) {
+        try {
+          const { error: pingErr } = await supabase.from('cashiers').select('id').limit(1)
+          canReachSupabase = !pingErr || pingErr.code !== 'PGRST301'
+          if (canReachSupabase) this.setOnline(true)
+        } catch {}
+      }
+
+      if (!canReachSupabase) {
         this.isSyncing = false
         this.notify()
         return {
