@@ -227,12 +227,37 @@ export function Dashboard() {
   useEffect(() => {
     loadData()
 
-    // 1. Subscribe to real-time events across all devices
+    // 1. Subscribe to local syncManager updates
     const unsubscribe = syncManager.subscribe(() => {
       loadData(false)
     })
 
-    // 2. Continuous real-time cloud polling every 5 seconds
+    // 2. Window focus & tab visibility listeners (instant refresh when user opens or returns to sales.yolobites.com)
+    const handleVisibilityOrFocus = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        loadData(false)
+      }
+    }
+    window.addEventListener('focus', handleVisibilityOrFocus)
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus)
+
+    // 3. Supabase Realtime WebSocket subscription for instant cross-device updates (< 100ms)
+    let channel: any = null
+    import('../supabaseClient').then(({ supabase }) => {
+      channel = supabase
+        .channel('dashboard-orders-live')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
+          loadData(false)
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, () => {
+          loadData(false)
+        })
+        .subscribe()
+    }).catch(err => {
+      console.warn('Realtime subscription note:', err)
+    })
+
+    // 4. Continuous background cloud polling every 5 seconds as fallback
     const interval = setInterval(() => {
       loadData(false)
     }, 5000)
@@ -240,6 +265,13 @@ export function Dashboard() {
     return () => {
       unsubscribe()
       clearInterval(interval)
+      window.removeEventListener('focus', handleVisibilityOrFocus)
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus)
+      if (channel) {
+        import('../supabaseClient').then(({ supabase }) => {
+          supabase.removeChannel(channel).catch(() => {})
+        }).catch(() => {})
+      }
     }
   }, [])
 

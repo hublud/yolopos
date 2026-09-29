@@ -45,8 +45,26 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
 }
 
 function App() {
-  const [cashier, setCashier] = useState<any>(null)
-  const [currentTab, setTab] = useState<string>('pos')
+  const isSalesDomain = typeof window !== 'undefined' && (
+    window.location.hostname.includes('sales') || 
+    window.location.search.includes('sales') || 
+    window.location.hash.includes('dashboard') ||
+    window.location.pathname.includes('dashboard')
+  )
+
+  const [cashier, setCashier] = useState<any>(() => {
+    try {
+      const saved = localStorage.getItem('pos_active_cashier')
+      return saved ? JSON.parse(saved) : null
+    } catch {
+      return null
+    }
+  })
+
+  const [currentTab, setTab] = useState<string>(() => {
+    return isSalesDomain ? 'dashboard' : 'pos'
+  })
+
   const [products, setProducts] = useState<any[]>(() => syncManager.getCached<any[]>('products', []))
   const [loadingProducts, setLoadingProducts] = useState<boolean>(() => syncManager.getCached<any[]>('products', []).length === 0)
   const [settings, setSettings] = useState<any>(() => syncManager.getCached<any>('settings', {
@@ -56,6 +74,25 @@ function App() {
     phones: '07013974928, 07044030444'
   }))
 
+  const handleLogin = (user: any) => {
+    setCashier(user)
+    try {
+      localStorage.setItem('pos_active_cashier', JSON.stringify(user))
+    } catch {}
+    if (user?.role === 'admin' && isSalesDomain) {
+      setTab('dashboard')
+    } else if (user?.role !== 'admin') {
+      setTab('pos')
+    }
+  }
+
+  const handleLogout = () => {
+    setCashier(null)
+    try {
+      localStorage.removeItem('pos_active_cashier')
+    } catch {}
+  }
+
   // Initial data load and real-time sync subscription
   useEffect(() => {
     if (!cashier) return
@@ -63,6 +100,8 @@ function App() {
     loadSettings()
     if (cashier.role !== 'admin') {
       setTab('pos')
+    } else if (isSalesDomain) {
+      setTab('dashboard')
     }
 
     const unsubscribe = syncManager.subscribe(() => {
@@ -96,7 +135,7 @@ function App() {
   }
 
   if (!cashier) {
-    return <Login onLogin={setCashier} />
+    return <Login onLogin={handleLogin} />
   }
 
   return (
@@ -104,7 +143,7 @@ function App() {
       currentTab={currentTab} 
       setTab={setTab} 
       cashier={cashier} 
-      onLogout={() => setCashier(null)}
+      onLogout={handleLogout}
     >
       <ErrorBoundary>
         {currentTab === 'pos' && <POS cashier={cashier} products={products} settings={settings} loading={loadingProducts} />}

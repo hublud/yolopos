@@ -637,7 +637,7 @@ export const supabaseApi = {
   getOrders: async () => {
     try {
       const [ordersRes, cashiersRes, customersRes, productsRes] = await Promise.all([
-        supabase.from('orders').select('*').order('created_at', { ascending: false }).limit(500),
+        supabase.from('orders').select('*, order_items(*)').order('created_at', { ascending: false }).limit(2000),
         supabase.from('cashiers').select('id, name'),
         supabase.from('customers').select('id, name'),
         supabase.from('products').select('id, name, category')
@@ -655,28 +655,37 @@ export const supabaseApi = {
         const customersMap = new Map<string, string>(((customersRes as any).data || []).map((c: any) => [c.id, c.name]))
         const productsMap = new Map<string, any>(((productsRes as any).data || []).map((p: any) => [p.id, p]))
         
-        const orderIds = ordersRes.data.map((o: any) => o.id).filter(Boolean)
-        let itemsList: any[] = []
-        if (orderIds.length > 0) {
-          const { data: itemsData } = await supabase
-            .from('order_items')
-            .select('*')
-            .in('order_id', orderIds.slice(0, 500))
-          itemsList = itemsData || []
-        }
-
+        // Check if nested order_items were returned by the join
+        const hasNestedItems = ordersRes.data.some((o: any) => Array.isArray(o.order_items) && o.order_items.length > 0)
         const itemsByOrder: { [key: string]: any[] } = {}
-        for (const it of itemsList) {
-          if (!itemsByOrder[it.order_id]) itemsByOrder[it.order_id] = []
-          const prod = productsMap.get(it.product_id)
-          itemsByOrder[it.order_id].push({
-            productId: it.product_id,
-            name: prod?.name || 'Item',
-            category: prod?.category || '',
-            variantName: it.variant_name || '',
-            quantity: Number(it.quantity || 1),
-            price: Number(it.price || 0)
-          })
+
+        if (!hasNestedItems) {
+          const orderIds = ordersRes.data.map((o: any) => o.id).filter(Boolean)
+          let itemsList: any[] = []
+          // Batch in chunks of 100 to prevent URL length overflow
+          for (let i = 0; i < orderIds.length && i < 1000; i += 100) {
+            const chunk = orderIds.slice(i, i + 100)
+            const { data: chunkItems } = await supabase
+              .from('order_items')
+              .select('*')
+              .in('order_id', chunk)
+            if (chunkItems && chunkItems.length > 0) {
+              itemsList.push(...chunkItems)
+            }
+          }
+
+          for (const it of itemsList) {
+            if (!itemsByOrder[it.order_id]) itemsByOrder[it.order_id] = []
+            const prod = productsMap.get(it.product_id)
+            itemsByOrder[it.order_id].push({
+              productId: it.product_id,
+              name: prod?.name || 'Item',
+              category: prod?.category || '',
+              variantName: it.variant_name || '',
+              quantity: Number(it.quantity || 1),
+              price: Number(it.price || 0)
+            })
+          }
         }
 
         const cloudOrders = ordersRes.data.map((order: any) => {
@@ -694,6 +703,22 @@ export const supabaseApi = {
             }
           }
 
+          // Use nested order_items if present from the join, otherwise fallback to map
+          let orderItems = itemsByOrder[order.id] || []
+          if (Array.isArray(order.order_items) && order.order_items.length > 0) {
+            orderItems = order.order_items.map((it: any) => {
+              const prod = productsMap.get(it.product_id)
+              return {
+                productId: it.product_id,
+                name: prod?.name || 'Item',
+                category: prod?.category || '',
+                variantName: it.variant_name || '',
+                quantity: Number(it.quantity || 1),
+                price: Number(it.price || 0)
+              }
+            })
+          }
+
           return {
             id: order.id,
             orderNumber: order.order_number || order.orderNumber,
@@ -707,7 +732,7 @@ export const supabaseApi = {
             createdAt: timestamp,
             cashierName: cashiersMap.get(order.cashier_id) || (order.cashier_id === 'cashier-admin' ? 'Admin' : 'Staff'),
             customerName: customersMap.get(order.customer_id) || '',
-            items: itemsByOrder[order.id] || []
+            items: orderItems
           }
         })
 
