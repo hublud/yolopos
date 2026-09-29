@@ -1,5 +1,25 @@
 import { useState, useEffect } from 'react'
-import { Printer, Database, Store, Save, RefreshCw, Users, Key, Plus, X, Shield, Eye, EyeOff, Cloud, CheckCircle2, AlertTriangle, Globe } from 'lucide-react'
+import { 
+  Printer, 
+  Database, 
+  Store, 
+  Save, 
+  RefreshCw, 
+  Users, 
+  Key, 
+  Plus, 
+  X, 
+  Shield, 
+  Eye, 
+  EyeOff, 
+  Cloud, 
+  CheckCircle2, 
+  AlertTriangle, 
+  Globe,
+  Download,
+  Upload,
+  FileJson
+} from 'lucide-react'
 import { api } from '../api'
 import { getSupabaseConfig, reconfigureSupabase } from '../supabaseClient'
 import { syncManager } from '../services/syncManager'
@@ -30,6 +50,12 @@ export function Settings({ settings, onSettingsSaved }: SettingsProps) {
   const [isCloudTesting, setIsCloudTesting] = useState(false)
   const [cloudStatus, setCloudStatus] = useState<{ isConnected: boolean; message: string } | null>(null)
   const [cloudSaveSuccess, setCloudSaveSuccess] = useState(false)
+
+  // Migration & Export/Import States
+  const [isExporting, setIsExporting] = useState(false)
+  const [isImporting, setIsImporting] = useState(false)
+  const [isDirectSyncing, setIsDirectSyncing] = useState(false)
+  const [migrationMessage, setMigrationMessage] = useState('')
 
   // Staff Management States
   const [cashiersList, setCashiersList] = useState<any[]>([])
@@ -205,6 +231,220 @@ export function Settings({ settings, onSettingsSaved }: SettingsProps) {
       window.location.reload()
     } catch (err) {
       alert('Failed to reset: ' + (err as Error).message)
+    }
+  }
+
+  // 1. Export all local records to JSON file
+  const handleExportLocalData = async () => {
+    setIsExporting(true)
+    try {
+      // Gather orders from SQLite if in Electron
+      let sqliteOrders: any[] = []
+      if ((window as any).api?.getOrders) {
+        try {
+          sqliteOrders = await (window as any).api.getOrders()
+        } catch (e) {
+          console.warn('SQLite export note:', e)
+        }
+      }
+
+      // Gather orders from localStorage
+      const cachedOrders = syncManager.getCached<any[]>('orders', [])
+      const rawYoloOrders = (() => {
+        try {
+          const s = localStorage.getItem('yolo_orders')
+          return s ? JSON.parse(s) : []
+        } catch { return [] }
+      })()
+      const queueOrders = (() => {
+        try {
+          const q = localStorage.getItem('pos_offline_queue')
+          const arr = q ? JSON.parse(q) : []
+          return arr.filter((item: any) => item.type === 'CREATE_ORDER').map((item: any) => item.payload?.order).filter(Boolean)
+        } catch { return [] }
+      })()
+
+      // Merge and deduplicate orders by ID / orderNumber
+      const orderMap = new Map<string, any>()
+      for (const o of [...sqliteOrders, ...cachedOrders, ...rawYoloOrders, ...queueOrders]) {
+        if (o && (o.id || o.orderNumber)) {
+          const key = String(o.id || o.orderNumber)
+          if (!orderMap.has(key)) {
+            orderMap.set(key, o)
+          }
+        }
+      }
+      const allOrders = Array.from(orderMap.values())
+
+      const backupData = {
+        exportedAt: new Date().toISOString(),
+        businessName: settings?.businessName || 'YOLO BITES',
+        ordersCount: allOrders.length,
+        orders: allOrders,
+        products: syncManager.getCached<any[]>('products', []),
+        cashiers: syncManager.getCached<any[]>('cashiers', []),
+        customers: syncManager.getCached<any[]>('customers', []),
+        settings: settings
+      }
+
+      const jsonStr = JSON.stringify(backupData, null, 2)
+      const blob = new Blob([jsonStr], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      const dateStr = new Date().toISOString().split('T')[0]
+      link.href = url
+      link.download = `yolo_pos_backup_${dateStr}.json`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+
+      setMigrationMessage(`✓ Exported ${allOrders.length} orders successfully! Backup file downloaded.`)
+      setTimeout(() => setMigrationMessage(''), 7000)
+    } catch (e: any) {
+      alert('Export failed: ' + (e.message || 'Unknown error'))
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
+  // 2. Import a backup file and push its records directly to Supabase cloud
+  const handleImportAndPushToCloud = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setIsImporting(true)
+    setMigrationMessage('Reading backup file and connecting to Supabase...')
+    try {
+      const text = await file.text()
+      const data = JSON.parse(text)
+      const ordersToUpload = data.orders || (Array.isArray(data) ? data : [])
+
+      if (!ordersToUpload || ordersToUpload.length === 0) {
+        alert('No orders found in this backup file.')
+        setIsImporting(false)
+        setMigrationMessage('')
+        return
+      }
+
+      const { supabase } = await import('../supabaseClient')
+      let count = 0
+      for (const order of ordersToUpload) {
+        if (!order || (!order.id && !order.orderNumber)) continue
+        const orderId = String(order.id || 'ord-' + (order.orderNumber || Date.now()))
+        const validCashierId = (order.cashierId === 'cashier-admin' || order.cashierId === 'cashier-staff')
+          ? order.cashierId : 'cashier-staff'
+
+        const orderRow: any = {
+          id: orderId,
+          order_number: String(order.orderNumber || orderId),
+          total: Number(order.total || 0),
+          discount: Number(order.discount || 0),
+          tax: Number(order.tax || 0),
+          status: order.status || 'completed',
+          cashier_id: validCashierId,
+          created_at: Number(order.createdAt || Date.now())
+        }
+        if (order.customerId) orderRow.customer_id = order.customerId
+
+        const { error: oErr } = await supabase.from('orders').upsert(orderRow)
+        if (!oErr) {
+          count++
+          if (order.items && Array.isArray(order.items) && order.items.length > 0) {
+            const itemRows = order.items.map((it: any, idx: number) => ({
+              id: `${orderId}-item-${idx}`,
+              order_id: orderId,
+              product_id: String(it.productId || it.id || 'item'),
+              variant_name: it.variantName || null,
+              quantity: Number(it.quantity || 1),
+              price: Number(it.price || 0)
+            }))
+            await supabase.from('order_items').upsert(itemRows).catch(() => {})
+          }
+        }
+      }
+
+      setMigrationMessage(`✓ Successfully uploaded ${count} / ${ordersToUpload.length} orders to Supabase!`)
+      await api.getOrders()
+      syncManager.notify()
+      onSettingsSaved()
+      setTimeout(() => setMigrationMessage(''), 8000)
+    } catch (err: any) {
+      alert('Import failed: ' + (err.message || 'Invalid JSON file'))
+    } finally {
+      setIsImporting(false)
+      e.target.value = ''
+    }
+  }
+
+  // 3. Direct sync of all local records on this machine to Supabase
+  const handleDirectSyncToCloud = async () => {
+    setIsDirectSyncing(true)
+    setMigrationMessage('Syncing all local orders and queue to Supabase cloud...')
+    try {
+      const { supabase } = await import('../supabaseClient')
+
+      const cachedOrders = syncManager.getCached<any[]>('orders', [])
+      let sqliteOrders: any[] = []
+      if ((window as any).api?.getOrders) {
+        try { sqliteOrders = await (window as any).api.getOrders() } catch {}
+      }
+
+      const orderMap = new Map<string, any>()
+      for (const o of [...sqliteOrders, ...cachedOrders]) {
+        if (o && (o.id || o.orderNumber)) {
+          orderMap.set(String(o.id || o.orderNumber), o)
+        }
+      }
+
+      const allLocal = Array.from(orderMap.values())
+      let syncedCount = 0
+
+      for (const order of allLocal) {
+        const orderId = String(order.id || 'ord-' + (order.orderNumber || Date.now()))
+        const validCashierId = (order.cashierId === 'cashier-admin' || order.cashierId === 'cashier-staff')
+          ? order.cashierId : 'cashier-staff'
+
+        const orderRow: any = {
+          id: orderId,
+          order_number: String(order.orderNumber || orderId),
+          total: Number(order.total || 0),
+          discount: Number(order.discount || 0),
+          tax: Number(order.tax || 0),
+          status: order.status || 'completed',
+          cashier_id: validCashierId,
+          created_at: Number(order.createdAt || Date.now())
+        }
+        if (order.customerId) orderRow.customer_id = order.customerId
+
+        const { error } = await supabase.from('orders').upsert(orderRow)
+        if (!error) {
+          syncedCount++
+          if (order.items && Array.isArray(order.items) && order.items.length > 0) {
+            const itemRows = order.items.map((it: any, idx: number) => ({
+              id: `${orderId}-item-${idx}`,
+              order_id: orderId,
+              product_id: String(it.productId || it.id || 'item'),
+              variant_name: it.variantName || null,
+              quantity: Number(it.quantity || 1),
+              price: Number(it.price || 0)
+            }))
+            await supabase.from('order_items').upsert(itemRows).catch(() => {})
+          }
+        }
+      }
+
+      // Flush queue
+      await syncManager.syncPendingData(true)
+      await api.getOrders()
+      syncManager.notify()
+
+      setMigrationMessage(`✓ Direct sync complete! Uploaded ${syncedCount} order(s) to Supabase cloud.`)
+      setTimeout(() => setMigrationMessage(''), 7000)
+    } catch (e: any) {
+      alert('Direct sync error: ' + (e.message || 'Connection failed'))
+    } finally {
+      setIsDirectSyncing(false)
     }
   }
 
@@ -484,36 +724,108 @@ export function Settings({ settings, onSettingsSaved }: SettingsProps) {
           </div>
         </div>
 
-        {/* Database Settings */}
+        {/* Database Export, Import & Cloud Migration */}
         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
           <div className="flex items-center gap-3 mb-4 border-b border-gray-100 pb-4">
-            <div className="bg-red-50 p-2 rounded-lg text-yolo-red">
+            <div className="bg-blue-50 p-2 rounded-lg text-blue-600">
               <Database size={20} />
             </div>
-            <h3 className="font-bold text-lg text-gray-800">Database & Maintenance</h3>
-          </div>
-          
-          <div className="flex items-center justify-between">
             <div>
-              <p className="font-medium text-gray-800 text-sm">Local Database</p>
-              <p className="text-xs text-gray-500 mt-0.5 font-mono">Stored at: userData/yolobite.db</p>
+              <h3 className="font-bold text-lg text-gray-800">Database Export & Cloud Migration</h3>
+              <p className="text-xs text-gray-500">Export local transactions or migrate backup data directly to Supabase cloud</p>
             </div>
-            <button className="px-4 py-2 bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-lg text-sm font-medium transition-colors">
-              Backup Database
-            </button>
+          </div>
+
+          {/* Migration Status Notification */}
+          {migrationMessage && (
+            <div className="mb-4 p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-semibold flex items-center gap-2 animate-fadeIn">
+              <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+              <span>{migrationMessage}</span>
+            </div>
+          )}
+
+          <div className="flex flex-col gap-4">
+            {/* 1. Export Button */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-gray-50 rounded-xl border border-gray-100">
+              <div>
+                <p className="font-bold text-gray-800 text-sm flex items-center gap-1.5">
+                  <Download size={15} className="text-blue-600" />
+                  Export All Local POS Data to File
+                </p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Downloads all orders, items, and inventory stored locally on this machine into a JSON backup file.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleExportLocalData}
+                disabled={isExporting}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-all shadow-sm active:scale-95 flex items-center gap-1.5 shrink-0 self-start sm:self-auto disabled:opacity-50"
+              >
+                <Download size={14} />
+                {isExporting ? 'Exporting...' : 'Export Backup File'}
+              </button>
+            </div>
+
+            {/* 2. Upload Backup File */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-gray-50 rounded-xl border border-gray-100">
+              <div>
+                <p className="font-bold text-gray-800 text-sm flex items-center gap-1.5">
+                  <Upload size={15} className="text-emerald-600" />
+                  Upload Backup File & Push to Supabase Cloud
+                </p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Choose an exported backup file (from a USB flash drive or another PC) to push all records directly to Supabase.
+                </p>
+              </div>
+              <label className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-all shadow-sm active:scale-95 flex items-center gap-1.5 shrink-0 self-start sm:self-auto cursor-pointer">
+                <FileJson size={14} />
+                {isImporting ? 'Uploading to Cloud...' : 'Choose File & Push'}
+                <input
+                  type="file"
+                  accept=".json"
+                  onChange={handleImportAndPushToCloud}
+                  disabled={isImporting}
+                  className="hidden"
+                />
+              </label>
+            </div>
+
+            {/* 3. Direct Sync Button */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-gray-50 rounded-xl border border-gray-100">
+              <div>
+                <p className="font-bold text-gray-800 text-sm flex items-center gap-1.5">
+                  <RefreshCw size={14} className="text-orange-500" />
+                  Direct Sync Local Records to Cloud
+                </p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  If this POS machine has internet access, upload all local transactions directly to Supabase right now.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleDirectSyncToCloud}
+                disabled={isDirectSyncing}
+                className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-xs font-bold transition-all shadow-sm active:scale-95 flex items-center gap-1.5 shrink-0 self-start sm:self-auto disabled:opacity-50"
+              >
+                <RefreshCw size={13} className={isDirectSyncing ? 'animate-spin' : ''} />
+                {isDirectSyncing ? 'Syncing...' : 'Sync to Cloud Now'}
+              </button>
+            </div>
           </div>
           
-          <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
+          {/* Danger Zone */}
+          <div className="mt-5 pt-4 border-t border-gray-100 flex items-center justify-between">
             <div>
               <p className="font-medium text-yolo-red text-sm">Danger Zone</p>
-              <p className="text-xs text-gray-500 mt-0.5">Clear all transactions and reset data.</p>
+              <p className="text-xs text-gray-500 mt-0.5">Clear all local storage transactions and reset cached data.</p>
             </div>
             <button 
               onClick={handleFactoryReset}
-              className="px-4 py-2 bg-red-50 text-yolo-red hover:bg-red-100 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 active:scale-95"
+              className="px-4 py-2 bg-red-50 text-yolo-red hover:bg-red-100 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95"
             >
-              <RefreshCw size={14} />
-              Factory Reset
+              <RefreshCw size={13} />
+              Reset Cache
             </button>
           </div>
         </div>
